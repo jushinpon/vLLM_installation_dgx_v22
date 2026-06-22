@@ -1,0 +1,61 @@
+=== Continuation Sweep ===
+Wed Jun  3 10:44:48 CST 2026
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=16384 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.14 53.11 53.08 tok/s | Median: 53.11
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=65536 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.15 52.88 53.13 tok/s | Median: 53.13
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=32768 batched=4096 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.16 53.12 53.08 tok/s | Median: 53.12
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=32768 batched=16384 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.10 53.19 53.16 tok/s | Median: 53.16
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=32768 batched=32768 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 52.99 52.96 53.05 tok/s | Median: 52.99
+>> Sleeping for JIT cooldown...
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=32768 batched=8192 eager=1 chunked=1
+Unknown option: --force-eager

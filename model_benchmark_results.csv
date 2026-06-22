@@ -1,0 +1,6 @@
+model_label,served_model,model_path,start_status,ready_secs,tok_s_1,tok_s_2,tok_s_3,median_tok_s,latency_1,latency_2,latency_3,completion_tokens_1,completion_tokens_2,completion_tokens_3,error
+Llama-3.1-8B-FP8,llama-3.1-8b-fp8,/local_opt/vllm-models/nvidia-Llama-3.1-8B-Instruct-FP8,ok,0,26.41,26.41,26.42,26.41,19.380215870,19.383717054,19.376639702,512,512,512,
+Qwen3-14B-FP8,qwen3-14b-fp8,/local_opt/vllm-models/nvidia-Qwen3-14B-FP8,ok,0,14.87,14.89,14.91,14.89,34.419389605,34.368456931,34.326824610,512,512,512,
+Qwen3-32B-NVFP4,qwen3-32b-nvfp4,/local_opt/vllm-models/nvidia-Qwen3-32B-NVFP4,ok,1,11.26,11.25,11.25,11.25,45.468665712,45.494298943,45.508288327,512,512,512,
+Nemotron-30B-MoE-FP8,nemotron-30b-moe-fp8,/local_opt/vllm-models/nvidia-Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8,ok,0,54.67,54.68,54.61,54.67,9.363587461,9.362800389,9.375264859,512,512,512,
+Phi-4-reasoning-plus-FP8,phi-4-reasoning-plus-fp8,/local_opt/vllm-models/nvidia-Phi-4-reasoning-plus-FP8,ok,0,15.37,15.38,15.38,15.38,33.301375366,33.283915175,33.276820185,512,512,512,

@@ -1,0 +1,85 @@
+=== vLLM Parameter Sweep - Qwen3.6-35B-A3B-FP8 ===
+Start: Wed Jun  3 09:42:01 CST 2026
+STOP OK
+>> Start: gpu_mem=0.70 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.30 53.28 53.33 tok/s | Median: 53.30
+>> Start: gpu_mem=0.65 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.27 53.32 53.34 tok/s | Median: 53.32
+>> Start: gpu_mem=0.75 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.24 53.22 53.21 tok/s | Median: 53.22
+>> Start: gpu_mem=0.80 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.18 53.31 53.27 tok/s | Median: 53.27
+>> Start: gpu_mem=0.85 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.05 53.24 53.18 tok/s | Median: 53.18
+>> Start: gpu_mem=0.90 seqs=16 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.05 53.03 52.98 tok/s | Median: 53.03
+>> Start: gpu_mem=0.70 seqs=8 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 52.88 53.01 52.78 tok/s | Median: 52.88
+>> Start: gpu_mem=0.70 seqs=32 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 52.79 52.99 52.67 tok/s | Median: 52.79
+>> Start: gpu_mem=0.70 seqs=64 len=32768 batched=8192 eager=0 chunked=1
+[PASS] Chat test completed
+[PASS] Smoke test passed
+[INFO] Server kept running.
+[INFO] Check with: curl http://127.0.0.1:8000/v1/models
+START OK
+  Waiting for backend...
+  Ready after 1x5s
+  Runs: 53.02 53.08 53.10 tok/s | Median: 53.08
+>> Start: gpu_mem=0.70 seqs=16 len=16384 batched=8192 eager=0 chunked=1

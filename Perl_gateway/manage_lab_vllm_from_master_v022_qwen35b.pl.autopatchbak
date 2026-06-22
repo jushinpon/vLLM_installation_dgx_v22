@@ -1,0 +1,988 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+use JSON::PP qw(decode_json encode_json);
+use File::Spec;
+use POSIX qw(strftime);
+use HTTP::Tiny;
+
+# =============================================================================
+# manage_lab_vllm_from_master_v022_qwen35b.pl
+#
+# Run this script on the MASTER node.
+#
+# Purpose:
+#   Master-side orchestrator for the current DGX Spark / GB10 vLLM deployment.
+#
+# It manages:
+#   1. Backend vLLM on node09 using deploy_vllm4dgx_v022_qwen35b.pl
+#   2. Lab gateway on master using deploy_lab_vllm_gateway_v022_qwen35b.pl
+#   3. Student-token operations
+#   4. Per-student gateway limits
+#   5. Old systemd stop/disable checks
+#   6. Orphaned vLLM worker cleanup
+#
+# Current tested main model:
+#   Qwen/Qwen3.6-35B-A3B-FP8
+#   served model name: qwen3.6-35b-a3b-fp8
+#
+# Important:
+#   --disable-thinking
+#     forwards to backend deployer and starts vLLM with:
+#       --default-chat-template-kwargs '{"enable_thinking": false}'
+#
+#   --no-language-model-only
+#   --limit-mm-per-prompt='{"image":1}'
+#     allow multimodal/image input if the backend deployer also supports them.
+#
+# Recommended production apply-all:
+#   perl manage_lab_vllm_from_master_v022_qwen35b.pl apply-all \
+#     --backend-host=node09 \
+#     --backend-port=8000 \
+#     --gateway-port=9000 \
+#     --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
+#     --served-model-name=qwen3.6-35b-a3b-fp8 \
+#     --public-model-name=qwen3.6-35b-a3b-fp8 \
+#     --backend-model-name=qwen3.6-35b-a3b-fp8 \
+#     --gpu-memory-utilization=0.70 \
+#     --max-model-len=32768 \
+#     --max-num-seqs=16 \
+#     --max-num-batched-tokens=8192 \
+#     --tool-call-parser=qwen3_coder \
+#     --reasoning-parser=qwen3 \
+#     --disable-thinking \
+#     --max-concurrent-per-student=4 \
+#     --rpm-limit=60 \
+#     --client-timeout=60 \
+#     --downstream-timeout=600 \
+#     --request-hard-timeout=900 \
+#     --max-children=96
+#
+# Multimodal test apply-all:
+#   perl manage_lab_vllm_from_master_v022_qwen35b.pl apply-all \
+#     --backend-host=node09 \
+#     --backend-port=8000 \
+#     --gateway-port=9000 \
+#     --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
+#     --served-model-name=qwen3.6-35b-a3b-fp8 \
+#     --public-model-name=qwen3.6-35b-a3b-fp8 \
+#     --backend-model-name=qwen3.6-35b-a3b-fp8 \
+#     --gpu-memory-utilization=0.70 \
+#     --max-model-len=65536 \
+#     --max-num-seqs=8 \
+#     --max-num-batched-tokens=8192 \
+#     --tool-call-parser=qwen3_coder \
+#     --reasoning-parser=qwen3 \
+#     --disable-thinking \
+#     --no-language-model-only \
+#     --limit-mm-per-prompt='{"image":1}' \
+#     --max-concurrent-per-student=4 \
+#     --rpm-limit=60 \
+#     --client-timeout=60 \
+#     --downstream-timeout=600 \
+#     --request-hard-timeout=900 \
+#     --max-children=96
+# =============================================================================
+
+my %OPT = (
+    action                       => shift(@ARGV) || 'show',
+
+    # Backend SSH side
+    backend_host                 => 'node13',
+    backend_ssh_user             => 'root',
+    backend_ssh_opts             => '-o BatchMode=yes -o ConnectTimeout=10',
+    backend_setup_dir            => '/home/dgx-spark-vllm-setup',
+    backend_deploy_script        => 'deploy_vllm4dgx_v022_qwen35b.pl',
+    backend_smoke_script         => 'smoke_test_vllm_v022_qwen35b_a3b.sh',
+
+    # Master gateway side
+    gateway_setup_dir            => '/home/dgx-spark-vllm-setup',
+    gateway_deploy_script        => 'deploy_lab_vllm_gateway_v022_qwen35b.pl',
+    gateway_config               => '/local_opt/lab-vllm-gateway/config/gateway_config.json',
+
+    # Legacy systemd units
+    backend_service              => 'lab-vllm-backend',
+    gateway_service              => 'lab-vllm-gateway',
+
+    # Extra candidate service names to stop/check
+    backend_service_candidates   => 'lab-vllm-backend.service,vllm-backend.service,vllm-backend-service.service',
+    gateway_service_candidates   => 'lab-vllm-gateway.service,vllm-gateway.service,vllm-gateway-service.service',
+
+    # Backend vLLM settings
+    model_id                     => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
+    served_model_name            => 'qwen3.6-35b-a3b-fp8',
+    backend_bind_host            => '0.0.0.0',
+    backend_port                 => 8000,
+    gpu_memory_utilization       => '0.70',
+    max_model_len                => '32768',
+    max_num_batched_tokens       => '8192',
+    max_num_seqs                 => '16',
+    reasoning_parser             => 'qwen3',
+    tool_call_parser             => 'qwen3_coder',
+    kv_cache_dtype               => '',
+    device                       => '',
+    default_chat_template_kwargs => '',
+    disable_thinking             => 0,
+    backend_api_key              => $ENV{VLLM_BACKEND_API_KEY} || '',
+    backend_extra_args           => '',
+
+    # Multimodal / vision-related backend options
+    language_model_only          => 1,
+    limit_mm_per_prompt          => '',
+    media_io_kwargs              => '',
+    allowed_local_media_path     => '',
+    allowed_media_domains        => '',
+    mm_processor_kwargs          => '',
+
+    # Gateway settings
+    gateway_host                 => '0.0.0.0',
+    gateway_port                 => 9000,
+    public_model_name            => 'qwen3.6-35b-a3b-fp8',
+    backend_model_name           => 'qwen3.6-35b-a3b-fp8',
+    rpm_limit                    => 60,
+    max_concurrent_per_student   => 4,
+    client_timeout               => 60,
+    downstream_timeout           => 600,
+    request_hard_timeout         => 900,
+    max_children                 => 96,
+    rewrite_model_name           => 1,
+    gateway_extra_args           => '',
+
+    # Student admin
+    student_id                   => '',
+    token                        => '',
+    allow_ip                     => '',
+    student_max_concurrent       => '',
+    student_rpm_limit            => '',
+    clear_student_limits         => 0,
+
+    # Behavior flags
+    smoke_test_after_start        => 1,
+    skip_backend                  => 0,
+    skip_gateway                  => 0,
+    dry_run                      => 0,
+
+    # stop-all behavior
+    stop_old_systemd_on_stop_all     => 1,
+    disable_old_systemd_on_stop_all  => 0,
+    force_kill_backend_on_stop_all   => 1,
+);
+
+parse_args(\%OPT, \@ARGV);
+apply_derived_options(\%OPT);
+main();
+exit 0;
+
+# =============================================================================
+# Main dispatch
+# =============================================================================
+
+sub main {
+    my $a = $OPT{action};
+
+    if ($a eq 'show') {
+        show_all();
+    }
+    elsif ($a eq 'status') {
+        show_status();
+    }
+    elsif ($a eq 'apply-all') {
+        apply_all();
+    }
+    elsif ($a eq 'restart-all') {
+        backend_action('restart') unless $OPT{skip_backend};
+        gateway_action('restart') unless $OPT{skip_gateway};
+    }
+    elsif ($a eq 'stop-all') {
+        stop_all();
+    }
+    elsif ($a eq 'backend-start') {
+        backend_action('start');
+    }
+    elsif ($a eq 'backend-restart') {
+        backend_action('restart');
+    }
+    elsif ($a eq 'backend-stop') {
+        backend_action('stop');
+    }
+    elsif ($a eq 'backend-status') {
+        backend_action('status');
+    }
+    elsif ($a eq 'backend-smoke') {
+        backend_action('smoke');
+    }
+    elsif ($a eq 'gateway-setup') {
+        gateway_setup();
+    }
+    elsif ($a eq 'gateway-start') {
+        gateway_action('start');
+    }
+    elsif ($a eq 'gateway-restart') {
+        gateway_action('restart');
+    }
+    elsif ($a eq 'gateway-stop') {
+        gateway_action('stop');
+    }
+    elsif ($a eq 'gateway-status') {
+        gateway_action('status');
+    }
+    elsif ($a eq 'gateway-test-backend') {
+        gateway_action('test-backend');
+    }
+    elsif ($a eq 'add-student') {
+        gateway_student_action('add-student');
+    }
+    elsif ($a eq 'set-student-limits') {
+        gateway_student_action('set-student-limits');
+    }
+    elsif ($a eq 'remove-student') {
+        gateway_student_action('remove-student');
+    }
+    elsif ($a eq 'list-students') {
+        gateway_student_action('list-students');
+    }
+    elsif ($a eq 'show-old-systemd') {
+        show_old_systemd();
+    }
+    elsif ($a eq 'stop-old-systemd') {
+        stop_old_systemd(0);
+    }
+    elsif ($a eq 'disable-old-systemd') {
+        stop_old_systemd(1);
+    }
+    elsif ($a eq 'force-kill-backend') {
+        force_kill_backend_processes();
+    }
+    elsif ($a eq 'help') {
+        usage();
+    }
+    else {
+        die "Unknown action: $a\nUse --help for usage.\n";
+    }
+}
+
+# =============================================================================
+# High-level actions
+# =============================================================================
+
+sub show_all {
+    print "=== CURRENT MASTER-ORCHESTRATOR DEFAULTS ===\n";
+    print_kv('backend_host', $OPT{backend_host});
+    print_kv('backend_setup_dir', $OPT{backend_setup_dir});
+    print_kv('backend_deploy_script', $OPT{backend_deploy_script});
+    print_kv('model_id', $OPT{model_id});
+    print_kv('served_model_name', $OPT{served_model_name});
+    print_kv('backend_endpoint', "http://$OPT{backend_host}:$OPT{backend_port}/v1");
+    print_kv('gpu_memory_utilization', $OPT{gpu_memory_utilization});
+    print_kv('max_model_len', $OPT{max_model_len});
+    print_kv('max_num_batched_tokens', $OPT{max_num_batched_tokens});
+    print_kv('max_num_seqs', $OPT{max_num_seqs});
+    print_kv('reasoning_parser', $OPT{reasoning_parser} || '(disabled)');
+    print_kv('tool_call_parser', $OPT{tool_call_parser} || '(disabled)');
+    print_kv('kv_cache_dtype', $OPT{kv_cache_dtype} || '(not passed)');
+    print_kv('device', $OPT{device} || '(not passed)');
+    print_kv('default_chat_template_kwargs', $OPT{default_chat_template_kwargs} || '(not passed)');
+    print_kv('disable_thinking', $OPT{disable_thinking} ? 'yes' : 'no');
+
+    print "\n=== MULTIMODAL / VISION OPTIONS ===\n";
+    print_kv('language_model_only', $OPT{language_model_only} ? 'yes' : 'no');
+    print_kv('limit_mm_per_prompt', $OPT{limit_mm_per_prompt} || '(not passed)');
+    print_kv('media_io_kwargs', $OPT{media_io_kwargs} || '(not passed)');
+    print_kv('allowed_local_media_path', $OPT{allowed_local_media_path} || '(not passed)');
+    print_kv('allowed_media_domains', $OPT{allowed_media_domains} || '(not passed)');
+    print_kv('mm_processor_kwargs', $OPT{mm_processor_kwargs} || '(not passed)');
+
+    print "\n=== GATEWAY DEFAULTS ===\n";
+    print_kv('gateway_script', File::Spec->catfile($OPT{gateway_setup_dir}, $OPT{gateway_deploy_script}));
+    print_kv('gateway_endpoint', "http://MASTER_IP:$OPT{gateway_port}/v1");
+    print_kv('public_model_name', $OPT{public_model_name});
+    print_kv('backend_model_name', $OPT{backend_model_name});
+    print_kv('global max_concurrent_per_student', $OPT{max_concurrent_per_student});
+    print_kv('global rpm_limit', $OPT{rpm_limit});
+    print_kv('backend_api_key', $OPT{backend_api_key} ? 'enabled' : 'disabled');
+
+    print "\n=== STOP-ALL BEHAVIOR ===\n";
+    print_kv('stop_old_systemd_on_stop_all', $OPT{stop_old_systemd_on_stop_all} ? 'yes' : 'no');
+    print_kv('disable_old_systemd_on_stop_all', $OPT{disable_old_systemd_on_stop_all} ? 'yes' : 'no');
+    print_kv('force_kill_backend_on_stop_all', $OPT{force_kill_backend_on_stop_all} ? 'yes' : 'no');
+    print_kv('backend_service_candidates', join(',', service_list($OPT{backend_service}, $OPT{backend_service_candidates})));
+    print_kv('gateway_service_candidates', join(',', service_list($OPT{gateway_service}, $OPT{gateway_service_candidates})));
+
+    print "\n=== MASTER GATEWAY CONFIG FILE ===\n";
+    if (-f $OPT{gateway_config}) {
+        my $gw = eval { read_json_file($OPT{gateway_config}) } || {};
+        for my $k (sort keys %$gw) {
+            print "$k = " . value_to_text($gw->{$k}) . "\n";
+        }
+    } else {
+        print "missing: $OPT{gateway_config}\n";
+    }
+
+    print "\n=== BACKEND DEPLOY STATUS ===\n";
+    backend_action('status', 1);
+
+    print "\n=== GATEWAY DEPLOY STATUS ===\n";
+    gateway_action('status', 1);
+}
+
+sub show_status {
+    print "=== BACKEND STATUS ON $OPT{backend_host} ===\n";
+    backend_action('status', 1);
+
+    print "\n=== GATEWAY STATUS ON MASTER ===\n";
+    gateway_action('status', 1);
+
+    print "\n=== GATEWAY HEALTH CHECK ===\n";
+    my $url = "http://127.0.0.1:$OPT{gateway_port}/healthz";
+    my ($code, $body) = simple_http_get($url, '', 5);
+    print "GET $url -> " . ($code || 'no response') . "\n";
+    print "$body\n" if defined($body) && $body ne '';
+
+    print "\n=== LEGACY SYSTEMD QUICK CHECK ===\n";
+    show_old_systemd_quick();
+}
+
+sub apply_all {
+    print "=== APPLY ALL: backend + gateway ===\n";
+
+    unless ($OPT{skip_backend}) {
+        print "\n--- Restarting backend vLLM on $OPT{backend_host} ---\n";
+        backend_action('restart');
+    }
+
+    unless ($OPT{skip_gateway}) {
+        print "\n--- Setting up gateway config on master ---\n";
+        gateway_setup();
+
+        print "\n--- Restarting gateway on master ---\n";
+        gateway_action('restart');
+    }
+
+    print "\nAPPLY ALL OK\n";
+    print "Student/Hermes/OpenClaw settings:\n";
+    print "  Base URL: http://MASTER_PUBLIC_IP:$OPT{gateway_port}/v1\n";
+    print "  Model   : $OPT{public_model_name}\n";
+    print "  API key : student token from add-student/list-students\n";
+}
+
+sub stop_all {
+    print "=== STOP ALL: gateway + backend + legacy systemd + orphan workers ===\n";
+
+    unless ($OPT{skip_gateway}) {
+        print "\n--- Stopping Perl-managed gateway on master ---\n";
+        gateway_action('stop', 1);
+    }
+
+    unless ($OPT{skip_backend}) {
+        print "\n--- Stopping Perl-managed backend on $OPT{backend_host} ---\n";
+        backend_action('stop', 1);
+    }
+
+    if ($OPT{stop_old_systemd_on_stop_all}) {
+        print "\n--- Stopping legacy systemd services ---\n";
+        stop_old_systemd($OPT{disable_old_systemd_on_stop_all} ? 1 : 0);
+    }
+
+    if ($OPT{force_kill_backend_on_stop_all} && !$OPT{skip_backend}) {
+        print "\n--- Force-cleaning orphaned vLLM backend workers on $OPT{backend_host} ---\n";
+        force_kill_backend_processes();
+    }
+
+    print "\nSTOP ALL OK\n";
+}
+
+# =============================================================================
+# Backend orchestration through SSH
+# =============================================================================
+
+sub backend_action {
+    my ($action, $allow_fail) = @_;
+    $allow_fail ||= 0;
+
+    my @cmd = ('perl', $OPT{backend_deploy_script}, $action);
+
+    if ($action eq 'start' || $action eq 'restart') {
+        push @cmd,
+            "--host=$OPT{backend_bind_host}",
+            "--port=$OPT{backend_port}",
+            "--model-id=$OPT{model_id}",
+            "--served-model-name=$OPT{served_model_name}",
+            "--max-model-len=$OPT{max_model_len}",
+            "--max-num-seqs=$OPT{max_num_seqs}",
+            "--max-num-batched-tokens=$OPT{max_num_batched_tokens}",
+            "--gpu-memory-utilization=$OPT{gpu_memory_utilization}";
+
+        push @cmd, "--tool-call-parser=$OPT{tool_call_parser}" if $OPT{tool_call_parser} ne '';
+        push @cmd, "--reasoning-parser=$OPT{reasoning_parser}" if $OPT{reasoning_parser} ne '';
+        push @cmd, "--kv-cache-dtype=$OPT{kv_cache_dtype}" if $OPT{kv_cache_dtype} ne '';
+        push @cmd, "--device=$OPT{device}" if $OPT{device} ne '';
+
+        # Multimodal / vision-related backend options.
+        push @cmd, '--no-language-model-only' if !$OPT{language_model_only};
+        push @cmd, "--limit-mm-per-prompt=$OPT{limit_mm_per_prompt}" if $OPT{limit_mm_per_prompt} ne '';
+        push @cmd, "--media-io-kwargs=$OPT{media_io_kwargs}" if $OPT{media_io_kwargs} ne '';
+        push @cmd, "--allowed-local-media-path=$OPT{allowed_local_media_path}" if $OPT{allowed_local_media_path} ne '';
+        push @cmd, "--allowed-media-domains=$OPT{allowed_media_domains}" if $OPT{allowed_media_domains} ne '';
+        push @cmd, "--mm-processor-kwargs=$OPT{mm_processor_kwargs}" if $OPT{mm_processor_kwargs} ne '';
+
+        push @cmd, '--disable-thinking' if $OPT{disable_thinking};
+        push @cmd, "--default-chat-template-kwargs=$OPT{default_chat_template_kwargs}"
+            if $OPT{default_chat_template_kwargs} ne '' && !$OPT{disable_thinking};
+
+        push @cmd, "--api-key=$OPT{backend_api_key}" if $OPT{backend_api_key} ne '';
+        push @cmd, '--smoke-test-after-start' if $OPT{smoke_test_after_start};
+        push @cmd, split_shell_words($OPT{backend_extra_args}) if $OPT{backend_extra_args} ne '';
+    }
+
+    if ($action eq 'smoke') {
+        push @cmd, split_shell_words($OPT{backend_extra_args}) if $OPT{backend_extra_args} ne '';
+    }
+
+    my $remote = 'cd ' . shell_quote($OPT{backend_setup_dir}) . ' && ' . join(' ', map { shell_quote($_) } @cmd);
+    my ($ok, $out) = run_ssh($remote);
+    print $out;
+    die "Backend action '$action' failed on $OPT{backend_host}\n" if !$ok && !$allow_fail;
+    return $ok;
+}
+
+# =============================================================================
+# Gateway orchestration on master
+# =============================================================================
+
+sub gateway_setup {
+    my @cmd = (
+        'perl', $OPT{gateway_deploy_script}, 'setup-master',
+        "--backend-host=$OPT{backend_host}",
+        "--backend-port=$OPT{backend_port}",
+        "--gateway-host=$OPT{gateway_host}",
+        "--gateway-port=$OPT{gateway_port}",
+        "--public-model-name=$OPT{public_model_name}",
+        "--backend-model-name=$OPT{backend_model_name}",
+        "--rpm-limit=$OPT{rpm_limit}",
+        "--max-concurrent-per-student=$OPT{max_concurrent_per_student}",
+        "--client-timeout=$OPT{client_timeout}",
+        "--downstream-timeout=$OPT{downstream_timeout}",
+        "--request-hard-timeout=$OPT{request_hard_timeout}",
+        "--max-children=$OPT{max_children}",
+    );
+
+    push @cmd, "--downstream-api-key=$OPT{backend_api_key}" if $OPT{backend_api_key} ne '';
+    push @cmd, '--no-rewrite-model-name' if !$OPT{rewrite_model_name};
+    push @cmd, split_shell_words($OPT{gateway_extra_args}) if $OPT{gateway_extra_args} ne '';
+
+    my ($ok, $out) = run_local_in_dir($OPT{gateway_setup_dir}, \@cmd);
+    print $out;
+    die "Gateway setup failed\n" unless $ok;
+}
+
+sub gateway_action {
+    my ($action, $allow_fail) = @_;
+    $allow_fail ||= 0;
+
+    my @cmd = ('perl', $OPT{gateway_deploy_script}, $action);
+    push @cmd, split_shell_words($OPT{gateway_extra_args}) if $OPT{gateway_extra_args} ne '';
+
+    my ($ok, $out) = run_local_in_dir($OPT{gateway_setup_dir}, \@cmd);
+    print $out;
+    die "Gateway action '$action' failed\n" if !$ok && !$allow_fail;
+    return $ok;
+}
+
+sub gateway_student_action {
+    my ($action) = @_;
+
+    my @cmd = ('perl', $OPT{gateway_deploy_script}, $action);
+
+    push @cmd, "--student-id=$OPT{student_id}" if $OPT{student_id} ne '';
+    push @cmd, "--token=$OPT{token}" if $OPT{token} ne '';
+    push @cmd, "--allow-ip=$OPT{allow_ip}" if $OPT{allow_ip} ne '';
+
+    if ($OPT{student_max_concurrent} ne '') {
+        push @cmd, "--student-max-concurrent=$OPT{student_max_concurrent}";
+    }
+
+    if ($OPT{student_rpm_limit} ne '') {
+        push @cmd, "--student-rpm-limit=$OPT{student_rpm_limit}";
+    }
+
+    push @cmd, '--clear-student-limits' if $OPT{clear_student_limits};
+
+    my ($ok, $out) = run_local_in_dir($OPT{gateway_setup_dir}, \@cmd);
+    print $out;
+    die "Gateway student action '$action' failed\n" unless $ok;
+}
+
+# =============================================================================
+# Old systemd management
+# =============================================================================
+
+sub show_old_systemd {
+    print "=== OLD/LEGACY SYSTEMD SERVICES ===\n";
+    print "These are shown for conflict diagnosis. The new workflow uses the Perl deployers.\n\n";
+
+    print "--- Master gateway service candidates ---\n";
+    for my $svc (service_list($OPT{gateway_service}, $OPT{gateway_service_candidates})) {
+        print "\n### $svc\n";
+        my ($ok, $out) = run_cmd("systemctl status " . shell_quote($svc) . " --no-pager 2>&1 || true");
+        print $out;
+    }
+
+    print "\n--- Backend service candidates on $OPT{backend_host} ---\n";
+    for my $svc (service_list($OPT{backend_service}, $OPT{backend_service_candidates})) {
+        print "\n### $svc\n";
+        my ($ok, $out) = run_ssh("systemctl status " . shell_quote($svc) . " --no-pager 2>&1 || true");
+        print $out;
+    }
+
+    print "\n--- Logrotate files to check manually ---\n";
+    print "Master likely: /etc/logrotate.d/lab-vllm-gateway\n";
+    print "Backend likely: /etc/logrotate.d/lab-vllm-backend or custom vLLM backend logrotate\n";
+}
+
+sub show_old_systemd_quick {
+    my @gw = service_list($OPT{gateway_service}, $OPT{gateway_service_candidates});
+    my @be = service_list($OPT{backend_service}, $OPT{backend_service_candidates});
+
+    print "Master gateway service candidates: " . join(', ', @gw) . "\n";
+    my ($ok1, $out1) = run_cmd("systemctl list-units --type=service --all | grep -Ei 'vllm|gateway' || true");
+    print $out1 if $out1 ne '';
+
+    print "Backend service candidates on $OPT{backend_host}: " . join(', ', @be) . "\n";
+    my ($ok2, $out2) = run_ssh("systemctl list-units --type=service --all | grep -Ei 'vllm|gateway' || true");
+    print $out2 if $out2 ne '';
+}
+
+sub stop_old_systemd {
+    my ($disable) = @_;
+
+    my $verb = $disable ? 'disable --now' : 'stop';
+    my @gateway_services = service_list($OPT{gateway_service}, $OPT{gateway_service_candidates});
+    my @backend_services = service_list($OPT{backend_service}, $OPT{backend_service_candidates});
+
+    print "=== $verb old master gateway systemd services if present ===\n";
+    for my $svc (@gateway_services) {
+        print "--- master: systemctl $verb $svc ---\n";
+        my ($ok, $out) = run_cmd("systemctl $verb " . shell_quote($svc) . " 2>&1 || true");
+        print $out if defined($out) && $out ne '';
+    }
+
+    print "\n=== $verb old backend systemd services on $OPT{backend_host} if present ===\n";
+    for my $svc (@backend_services) {
+        print "--- $OPT{backend_host}: systemctl $verb $svc ---\n";
+        my ($ok, $out) = run_ssh("systemctl $verb " . shell_quote($svc) . " 2>&1 || true");
+        print $out if defined($out) && $out ne '';
+    }
+
+    print $disable
+        ? "\nOld services disabled with --now where present. Service files and logrotate files were not deleted.\n"
+        : "\nOld services stopped where present, but not disabled. If they restart after reboot, use disable-old-systemd.\n";
+}
+
+sub force_kill_backend_processes {
+    my $script = q{
+set +e
+echo "Before cleanup:"
+ps -ef | egrep 'vllm|EngineCore|api_server|/local_opt/vllm-install/.vllm/bin/python' | grep -v grep || true
+echo
+
+pkill -TERM -f 'vllm.entrypoints.openai.api_server' 2>/dev/null || true
+pkill -TERM -f 'VLLM::EngineCore' 2>/dev/null || true
+pkill -TERM -f 'python.*vllm' 2>/dev/null || true
+pkill -TERM -f '/local_opt/vllm-install/.vllm/bin/python' 2>/dev/null || true
+
+sleep 5
+
+pkill -KILL -f 'vllm.entrypoints.openai.api_server' 2>/dev/null || true
+pkill -KILL -f 'VLLM::EngineCore' 2>/dev/null || true
+pkill -KILL -f 'python.*vllm' 2>/dev/null || true
+pkill -KILL -f '/local_opt/vllm-install/.vllm/bin/python' 2>/dev/null || true
+
+rm -f /local_opt/vllm-service-v022-qwen35b/hosts/*/run/vllm.pid 2>/dev/null || true
+
+echo
+echo "After cleanup:"
+ps -ef | egrep 'vllm|EngineCore|api_server|/local_opt/vllm-install/.vllm/bin/python' | grep -v grep || echo "No vLLM processes found"
+echo
+ss -ltnp | grep ':8000' || echo "port 8000 is free"
+};
+
+    my ($ok, $out) = run_ssh("bash -lc " . shell_quote($script));
+    print $out;
+    return $ok;
+}
+
+# =============================================================================
+# Argument handling and validation
+# =============================================================================
+
+sub parse_args {
+    my ($opt, $argv) = @_;
+
+    for (my $i = 0; $i < @$argv; $i++) {
+        my $arg = $argv->[$i];
+
+        if ($arg =~ /^--([^=]+)=(.*)$/) {
+            my ($raw_k, $v) = ($1, $2);
+            my $k = $raw_k;
+            $k =~ s/-/_/g;
+
+            # Alias support for per-student gateway limits.
+            if ($k eq 'max_concurrent') {
+                $k = 'student_max_concurrent';
+            }
+            elsif ($k eq 'rpm_limit_student') {
+                $k = 'student_rpm_limit';
+            }
+
+            die "Unknown option: --$raw_k\n" unless exists $opt->{$k};
+            $opt->{$k} = $v;
+        }
+        elsif ($arg eq '--help' || $arg eq '-h') {
+            usage();
+            exit 0;
+        }
+        elsif ($arg eq '--skip-backend') {
+            $opt->{skip_backend} = 1;
+        }
+        elsif ($arg eq '--skip-gateway') {
+            $opt->{skip_gateway} = 1;
+        }
+        elsif ($arg eq '--no-smoke-test-after-start') {
+            $opt->{smoke_test_after_start} = 0;
+        }
+        elsif ($arg eq '--smoke-test-after-start') {
+            $opt->{smoke_test_after_start} = 1;
+        }
+        elsif ($arg eq '--no-rewrite-model-name') {
+            $opt->{rewrite_model_name} = 0;
+        }
+        elsif ($arg eq '--rewrite-model-name') {
+            $opt->{rewrite_model_name} = 1;
+        }
+        elsif ($arg eq '--dry-run') {
+            $opt->{dry_run} = 1;
+        }
+        elsif ($arg eq '--disable-thinking') {
+            $opt->{disable_thinking} = 1;
+            $opt->{default_chat_template_kwargs} = '{"enable_thinking": false}'
+                unless defined($opt->{default_chat_template_kwargs}) && $opt->{default_chat_template_kwargs} ne '';
+        }
+        elsif ($arg eq '--enable-thinking') {
+            $opt->{disable_thinking} = 0;
+            $opt->{default_chat_template_kwargs} = '';
+        }
+        elsif ($arg eq '--no-language-model-only') {
+            $opt->{language_model_only} = 0;
+        }
+        elsif ($arg eq '--language-model-only') {
+            $opt->{language_model_only} = 1;
+        }
+        elsif ($arg eq '--clear-student-limits') {
+            $opt->{clear_student_limits} = 1;
+        }
+        elsif ($arg eq '--stop-old-systemd-on-stop-all') {
+            $opt->{stop_old_systemd_on_stop_all} = 1;
+        }
+        elsif ($arg eq '--no-stop-old-systemd-on-stop-all') {
+            $opt->{stop_old_systemd_on_stop_all} = 0;
+        }
+        elsif ($arg eq '--disable-old-systemd-on-stop-all') {
+            $opt->{disable_old_systemd_on_stop_all} = 1;
+            $opt->{stop_old_systemd_on_stop_all} = 1;
+        }
+        elsif ($arg eq '--no-disable-old-systemd-on-stop-all') {
+            $opt->{disable_old_systemd_on_stop_all} = 0;
+        }
+        elsif ($arg eq '--force-kill-backend-on-stop-all') {
+            $opt->{force_kill_backend_on_stop_all} = 1;
+        }
+        elsif ($arg eq '--no-force-kill-backend-on-stop-all') {
+            $opt->{force_kill_backend_on_stop_all} = 0;
+        }
+        elsif ($arg =~ /^--(.+)$/) {
+            my $raw_k = $1;
+            my $k = $raw_k;
+            $k =~ s/-/_/g;
+
+            if ($k eq 'max_concurrent') {
+                $k = 'student_max_concurrent';
+            }
+            elsif ($k eq 'rpm_limit_student') {
+                $k = 'student_rpm_limit';
+            }
+
+            die "Unknown option: --$raw_k\n" unless exists $opt->{$k};
+            die "Missing value for --$raw_k\n" unless defined $argv->[$i + 1];
+            $opt->{$k} = $argv->[++$i];
+        }
+        else {
+            die "Unknown argument: $arg\nUse --help for usage.\n";
+        }
+    }
+
+    validate_options($opt);
+}
+
+sub apply_derived_options {
+    my ($opt) = @_;
+    if ($opt->{disable_thinking}) {
+        $opt->{default_chat_template_kwargs} = '{"enable_thinking": false}'
+            unless defined($opt->{default_chat_template_kwargs}) && $opt->{default_chat_template_kwargs} ne '';
+    }
+}
+
+sub validate_options {
+    my ($opt) = @_;
+
+    for my $k (qw(backend_port gateway_port max_model_len max_num_batched_tokens max_num_seqs rpm_limit max_concurrent_per_student client_timeout downstream_timeout request_hard_timeout max_children)) {
+        die "Invalid numeric option $k=$opt->{$k}\n" unless defined($opt->{$k}) && $opt->{$k} =~ /^\d+$/;
+    }
+
+    if ($opt->{student_max_concurrent} ne '') {
+        die "Invalid student_max_concurrent=$opt->{student_max_concurrent}\n"
+            unless $opt->{student_max_concurrent} =~ /^\d+$/ && $opt->{student_max_concurrent} >= 1;
+    }
+
+    if ($opt->{student_rpm_limit} ne '') {
+        die "Invalid student_rpm_limit=$opt->{student_rpm_limit}\n"
+            unless $opt->{student_rpm_limit} =~ /^\d+$/ && $opt->{student_rpm_limit} >= 1;
+    }
+
+    die "Invalid gpu_memory_utilization=$opt->{gpu_memory_utilization}\n"
+        unless defined($opt->{gpu_memory_utilization}) && $opt->{gpu_memory_utilization} =~ /^\d+(?:\.\d+)?$/;
+
+    if ($opt->{kv_cache_dtype} ne '') {
+        die "Invalid kv_cache_dtype. Use fp8, fp8_e4m3, fp8_e5m2, or auto.\n"
+            unless $opt->{kv_cache_dtype} =~ /^(fp8|fp8_e4m3|fp8_e5m2|auto)$/;
+    }
+
+    if ($opt->{device} ne '') {
+        die "Invalid device. Usually use cuda or leave empty.\n"
+            unless $opt->{device} =~ /^(cuda|auto|cpu|xpu|hpu|neuron|tpu|openvino)$/;
+    }
+
+    if ($opt->{gpu_memory_utilization} < 0.65 && $opt->{max_model_len} >= 32768) {
+        warn "WARNING: gpu_memory_utilization=$opt->{gpu_memory_utilization} may be low for long context.\n";
+    }
+}
+
+# =============================================================================
+# Utilities
+# =============================================================================
+
+sub run_ssh {
+    my ($remote_cmd) = @_;
+    my $target = "$OPT{backend_ssh_user}\@$OPT{backend_host}";
+    my $cmd = "ssh $OPT{backend_ssh_opts} " . shell_quote($target) . " " . shell_quote($remote_cmd);
+    return run_cmd($cmd);
+}
+
+sub run_local_in_dir {
+    my ($dir, $argv) = @_;
+    my $cmd = 'cd ' . shell_quote($dir) . ' && ' . join(' ', map { shell_quote($_) } @$argv);
+    return run_cmd($cmd);
+}
+
+sub run_cmd {
+    my ($cmd) = @_;
+    print "[DRY-RUN] $cmd\n" and return (1, '') if $OPT{dry_run};
+    my $out = `$cmd`;
+    my $rc  = $? >> 8;
+    return ($rc == 0 ? 1 : 0, $out // '');
+}
+
+sub simple_http_get {
+    my ($url, $api_key, $timeout) = @_;
+    my $http = HTTP::Tiny->new(
+        timeout => $timeout || 5,
+        verify_SSL => 0,
+        default_headers => {
+            ($api_key ? ('Authorization' => "Bearer $api_key") : ()),
+        },
+    );
+    my $res = $http->get($url);
+    return ($res->{status}, $res->{content});
+}
+
+sub read_json_file {
+    my ($file) = @_;
+    open my $fh, '<', $file or die "Cannot read $file: $!\n";
+    local $/;
+    my $txt = <$fh>;
+    close $fh;
+    return decode_json($txt);
+}
+
+sub value_to_text {
+    my ($v) = @_;
+    return '' if !defined $v;
+    return ref($v) eq '' ? $v : encode_json($v);
+}
+
+sub print_kv {
+    my ($k, $v) = @_;
+    $v = '' unless defined $v;
+    print "$k = $v\n";
+}
+
+sub service_list {
+    my ($primary, $csv) = @_;
+    my %seen;
+    my @out;
+
+    for my $s ($primary, split(/\s*,\s*/, $csv || '')) {
+        next unless defined $s && $s ne '';
+        next if $seen{$s}++;
+        push @out, $s;
+    }
+
+    return @out;
+}
+
+sub shell_quote {
+    my ($s) = @_;
+    return "''" if !defined($s) || $s eq '';
+    $s =~ s/'/'"'"'/g;
+    return "'$s'";
+}
+
+sub split_shell_words {
+    my ($s) = @_;
+    return () unless defined($s) && $s ne '';
+    my @out;
+    while ($s =~ /\G\s*(?:'([^']*)'|"((?:\\.|[^"])*)"|(\S+))/gc) {
+        my $w = defined $1 ? $1 : defined $2 ? $2 : $3;
+        $w =~ s/\\(["\\$`])/$1/g if defined $2;
+        push @out, $w;
+    }
+    return @out;
+}
+
+sub usage {
+    print <<'USAGE';
+Usage:
+  perl manage_lab_vllm_from_master_v022_qwen35b.pl ACTION [options]
+
+Actions:
+  show
+  status
+  apply-all
+  restart-all
+  stop-all
+
+  backend-start
+  backend-restart
+  backend-stop
+  backend-status
+  backend-smoke
+
+  gateway-setup
+  gateway-start
+  gateway-restart
+  gateway-stop
+  gateway-status
+  gateway-test-backend
+
+  add-student
+  set-student-limits
+  remove-student
+  list-students
+
+  show-old-systemd
+  stop-old-systemd
+  disable-old-systemd
+  force-kill-backend
+
+Recommended text-only Qwen3.6 A3B deployment:
+  perl manage_lab_vllm_from_master_v022_qwen35b.pl apply-all \
+    --backend-host=node09 \
+    --backend-port=8000 \
+    --gateway-port=9000 \
+    --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
+    --served-model-name=qwen3.6-35b-a3b-fp8 \
+    --public-model-name=qwen3.6-35b-a3b-fp8 \
+    --backend-model-name=qwen3.6-35b-a3b-fp8 \
+    --gpu-memory-utilization=0.70 \
+    --max-model-len=32768 \
+    --max-num-seqs=16 \
+    --max-num-batched-tokens=8192 \
+    --tool-call-parser=qwen3_coder \
+    --reasoning-parser=qwen3 \
+    --disable-thinking \
+    --max-concurrent-per-student=4 \
+    --rpm-limit=60 \
+    --client-timeout=60 \
+    --downstream-timeout=600 \
+    --request-hard-timeout=900 \
+    --max-children=96
+
+Recommended multimodal Qwen3.6 A3B deployment:
+  perl manage_lab_vllm_from_master_v022_qwen35b.pl apply-all \
+    --backend-host=node09 \
+    --backend-port=8000 \
+    --gateway-port=9000 \
+    --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
+    --served-model-name=qwen3.6-35b-a3b-fp8 \
+    --public-model-name=qwen3.6-35b-a3b-fp8 \
+    --backend-model-name=qwen3.6-35b-a3b-fp8 \
+    --gpu-memory-utilization=0.70 \
+    --max-model-len=65536 \
+    --max-num-seqs=8 \
+    --max-num-batched-tokens=8192 \
+    --tool-call-parser=qwen3_coder \
+    --reasoning-parser=qwen3 \
+    --disable-thinking \
+    --no-language-model-only \
+    --limit-mm-per-prompt='{"image":1}' \
+    --max-concurrent-per-student=4 \
+    --rpm-limit=60 \
+    --client-timeout=60 \
+    --downstream-timeout=600 \
+    --request-hard-timeout=900 \
+    --max-children=96
+
+Backend vLLM options:
+  --model-id=PATH_OR_HF_ID
+  --served-model-name=NAME
+  --backend-bind-host=0.0.0.0
+  --backend-port=8000
+  --gpu-memory-utilization=0.70
+  --max-model-len=32768
+  --max-num-batched-tokens=8192
+  --max-num-seqs=16
+  --reasoning-parser=qwen3
+  --tool-call-parser=qwen3_coder
+  --disable-thinking
+  --enable-thinking
+  --default-chat-template-kwargs='{"enable_thinking": false}'
+
+Multimodal backend options:
+  --no-language-model-only
+  --language-model-only
+  --limit-mm-per-prompt='{"image":1}'
+  --media-io-kwargs='...'
+  --allowed-local-media-path=/path
+  --allowed-media-domains=domain1,domain2
+  --mm-processor-kwargs='...'
+
+Gateway options:
+  --gateway-host=0.0.0.0
+  --gateway-port=9000
+  --public-model-name=NAME
+  --backend-model-name=NAME
+  --rpm-limit=60
+  --max-concurrent-per-student=4
+  --client-timeout=60
+  --downstream-timeout=600
+  --request-hard-timeout=900
+  --max-children=96
+
+Per-student options:
+  --student-id=ID
+  --token=TOKEN
+  --allow-ip=IP1,IP2
+  --student-max-concurrent=N
+  --student-rpm-limit=N
+  --clear-student-limits
+USAGE
+}
