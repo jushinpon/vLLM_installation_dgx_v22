@@ -123,7 +123,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --disable-thinking \
-  --language-model-only \
+  --no-language-model-only \\n  --limit-mm-per-prompt='{"image":1}' \
   --max-concurrent-per-student=6 \
   --rpm-limit=120 \
   --client-timeout=300 \
@@ -218,7 +218,7 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
 | `--disable-thinking` | on | Disable thinking/reasoning in output |
-| `--language-model-only` | on | Text-only mode (disable vision) |
+| `--no-language-model-only \\n  --limit-mm-per-prompt='{"image":1}'` | on | Text-only mode (disable vision) |
 | `--no-language-model-only` | off | Enable multimodal (image input) |
 | `--vllm-allow-long-max-model-len` | off | Override model's max position embeddings |
 
