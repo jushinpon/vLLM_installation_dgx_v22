@@ -1,0 +1,6 @@
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# vLLM generation watchdog for node13 Qwen backend.
+# Runs a real /v1/chat/completions smoke test. Restarts backend after 3 consecutive failures.
+*/2 * * * * root /usr/local/sbin/vllm_qwen35b_watchdog.sh

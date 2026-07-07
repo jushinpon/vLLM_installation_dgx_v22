@@ -410,3 +410,18 @@ perl deploy_lab_vllm_gateway_v022_qwen35b.pl start
 - MoE backend: `triton` (no SM100 cutlass kernel available on GB10)
 - nginx gateway uses `map` for token auth and `limit_req_zone` for rate limiting
 - **fail2ban** is installed on the master for SSH brute-force protection
+
+## Production stability setup
+
+After installing or reinstalling vLLM, apply the production stability patch:
+
+```bash
+cd /home/dgx-spark-vllm-setup-v022
+patch_20260630/scripts/03_set_vllm_131k_textonly_and_restart.sh
+patch_20260630/scripts/04_install_vllm_watchdog_cron.sh
+patch_20260630/scripts/05_verify_vllm_watchdog.sh
+```
+
+This configures the backend with `max_model_len=131072`, text-only mode, and installs a cron-based generation watchdog. The watchdog checks `/health`, `/v1/models`, and a real `/v1/chat/completions` smoke test every 2 minutes. After 3 consecutive generation failures, it restarts only the node13 vLLM backend through the manager.
+
+See `patch_20260630/README.md` for full details, including log paths, state files, backup locations, and recovery notes.

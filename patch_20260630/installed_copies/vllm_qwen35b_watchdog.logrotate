@@ -1,0 +1,8 @@
+/var/log/vllm_qwen35b_watchdog.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
