@@ -68,6 +68,49 @@ Backend vLLM on `node13:8000`.
 
 ## Installation
 
+### New Machine Bootstrap
+
+After cloning this repo on the master node, use the bootstrap wrapper for a new
+cluster. It copies the repo to the backend node, installs vLLM, downloads the
+Qwen3.6 35B A3B FP8 model, deploys the backend and nginx gateway, and installs
+the cron watchdog.
+
+```bash
+cd /home/vLLM_installation_dgx_v22
+bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
+  --backend-host=node13
+```
+
+For a machine that already has vLLM and the model installed, only reapply the
+runtime and gateway settings:
+
+```bash
+cd /home/vLLM_installation_dgx_v22
+bash bootstrap_new_cluster_v022_qwen35b.sh --apply-only \
+  --backend-host=node13
+```
+
+Default production settings used by the bootstrap:
+
+```text
+model_id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8
+served_model_name=qwen3.6-35b-a3b-fp8
+gpu_memory_utilization=0.85
+max_model_len=131072
+max_num_batched_tokens=16384
+max_num_seqs=4
+gateway_port=9000
+watchdog=enabled
+```
+
+Use `--dry-run` first when adapting to a new cluster name or backend hostname:
+
+```bash
+bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
+  --backend-host=node13 \
+  --dry-run
+```
+
 ### 1. Install vLLM on backend (node13)
 
 ```bash
@@ -117,8 +160,8 @@ This installs nginx, opens port 9000 in firewalld, enables SELinux network conne
 cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=262144 \
-  --max-num-seqs=8 \
+  --max-model-len=131072 \
+  --max-num-seqs=4 \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
@@ -141,7 +184,7 @@ cleanup and install the generation watchdog as part of the deployment:
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
-  --gpu-memory-utilization=0.85 --max-model-len=262144 \
+  --gpu-memory-utilization=0.85 --max-model-len=131072 \
   --with-cleanup --with-watchdog
 ```
 
@@ -149,7 +192,8 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
-  --gpu-memory-utilization=0.85 --max-model-len=262144 ...
+  --gpu-memory-utilization=0.85 --max-model-len=131072 \
+  --max-num-seqs=4 --max-num-batched-tokens=16384 ...
 ```
 
 ### Gateway only (skip backend restart)
@@ -234,8 +278,8 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8` | Model path or HF ID |
 | `--served-model-name` | `qwen3.6-35b-a3b-fp8` | Model name exposed by API |
 | `--gpu-memory-utilization` | `0.85` | Fraction of GPU memory for KV cache |
-| `--max-model-len` | `262144` | Maximum context length (model limit) |
-| `--max-num-seqs` | `8` | Max concurrent sequences |
+| `--max-model-len` | `131072` | Maximum context length |
+| `--max-num-seqs` | `4` | Max concurrent sequences |
 | `--max-num-batched-tokens` | `16384` | Max tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
@@ -385,8 +429,10 @@ bash opencode_quality_ab.sh
 
 | Context | `max-model-len` | `max-num-seqs` | `gpu-memory-utilization` |
 |---------|----------------|---------------|--------------------------|
-| 128K | 128000 | 8 | 0.85 |
-| 262K | 262144 | 8 | 0.85 |
+| 128K validated | 131072 | 4 | 0.85 |
+| 64K safer fallback | 65536 | 8 | 0.75 |
+| 32K conservative fallback | 32768 | 16 | 0.70 |
+| 262K experimental | 262144 | 4 | 0.85 (may need lower batch/sequences) |
 | 320K | 327680 | 4 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 | 520K | 520000 | 2 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 
