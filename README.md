@@ -15,14 +15,14 @@ Backend vLLM on `node13:8000`.
 | Backend (vLLM) | node13 | 8000 | `/local_opt/vllm-service-qwen35b/` |
 | Install root | node13 | — | `/local_opt/vllm-install/` |
 | Model storage | node13 | — | `/local_opt/vllm-models/` |
-| Scripts | master | — | `/home/dgx-spark-vllm-setup-v022/` |
+| Scripts | master | — | `./` |
 
 ---
 
 ## Directory Structure
 
 ```
-/home/dgx-spark-vllm-setup-v022/
+./
 ├── deploy_nginx_gateway_v022_qwen35b.pl      # Nginx gateway installer/manager
 ├── manage_lab_vllm_nginx_from_master_v022_qwen35b.pl  # Main orchestrator (nginx)
 ├── deploy_vllm4dgx_v022_qwen35b.pl           # Backend vLLM deployer (node13)
@@ -72,7 +72,7 @@ Backend vLLM on `node13:8000`.
 
 ```bash
 ssh node13
-bash /home/dgx-spark-vllm-setup-v022/install_vllm-v022.sh
+bash ./install_vllm-v022.sh
 ```
 
 Installs:
@@ -88,7 +88,7 @@ Takes ~20 min on DGX Spark (CPU compilation).
 Edit `download_model_on_backend_v022_qwen35b.pl` to set the desired HuggingFace model ID, then:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/download_model_on_backend_v022_qwen35b.pl
+perl ./download_model_on_backend_v022_qwen35b.pl
 ```
 
 Downloads model to `/local_opt/vllm-models/<model-name>/`.
@@ -96,13 +96,13 @@ Downloads model to `/local_opt/vllm-models/<model-name>/`.
 ### 3. Install nginx gateway (master)
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/install_nginx.sh
+perl ./install_nginx.sh
 ```
 
 Or use the deploy script directly:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/deploy_nginx_gateway_v022_qwen35b.pl setup
+perl ./deploy_nginx_gateway_v022_qwen35b.pl setup
 ```
 
 This installs nginx, opens port 9000 in firewalld, enables SELinux network connect, and generates the initial config.
@@ -114,7 +114,7 @@ This installs nginx, opens port 9000 in firewalld, enables SELinux network conne
 ### Full deployment (backend + gateway)
 
 ```bash
-cd /home/dgx-spark-vllm-setup-v022
+cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --gpu-memory-utilization=0.85 \
   --max-model-len=262144 \
@@ -302,7 +302,7 @@ print(response.choices[0].message.content)
 ### Smoke test (backend)
 
 ```bash
-bash /home/dgx-spark-vllm-setup-v022/smoke_test_vllm_v022_qwen35b_a3b.sh
+bash ./smoke_test_vllm_v022_qwen35b_a3b.sh
 ```
 
 ### Gateway health
@@ -320,7 +320,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-smoke
 ### Process status
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/test_vllm_ps_v022_qwen35b_a3b.pl
+perl ./test_vllm_ps_v022_qwen35b_a3b.pl
 ```
 
 ---
@@ -414,7 +414,7 @@ The old Perl prefork gateway has been moved to `Perl_gateway/`.
 To use it instead of nginx:
 
 ```bash
-cd /home/dgx-spark-vllm-setup-v022/Perl_gateway
+cd vLLM_installation_dgx_v22/Perl_gateway
 perl deploy_lab_vllm_gateway_v022_qwen35b.pl setup-master --backend-host=node13 --backend-port=8000
 perl deploy_lab_vllm_gateway_v022_qwen35b.pl start
 ```
@@ -438,7 +438,7 @@ perl deploy_lab_vllm_gateway_v022_qwen35b.pl start
 After installing or reinstalling vLLM, apply the production stability patch in one command:
 
 ```bash
-cd /home/dgx-spark-vllm-setup-v022
+cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all --with-cleanup --with-watchdog
 ```
 
