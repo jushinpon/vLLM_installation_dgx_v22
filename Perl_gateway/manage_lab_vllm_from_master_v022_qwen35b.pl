@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 use strict;
+use FindBin;
 use warnings;
 use JSON::PP qw(decode_json encode_json);
 use File::Spec;
@@ -91,12 +92,12 @@ my %OPT = (
     backend_host                 => 'node13',
     backend_ssh_user             => 'root',
     backend_ssh_opts             => '-o BatchMode=yes -o ConnectTimeout=10',
-    backend_setup_dir            => '/home/dgx-spark-vllm-setup',
+    backend_setup_dir            => /..,
     backend_deploy_script        => 'deploy_vllm4dgx_v022_qwen35b.pl',
     backend_smoke_script         => 'smoke_test_vllm_v022_qwen35b_a3b.sh',
 
     # Master gateway side
-    gateway_setup_dir            => '/home/dgx-spark-vllm-setup',
+    gateway_setup_dir            => /..,
     gateway_deploy_script        => 'deploy_lab_vllm_gateway_v022_qwen35b.pl',
     gateway_config               => '/local_opt/lab-vllm-gateway/config/gateway_config.json',
 

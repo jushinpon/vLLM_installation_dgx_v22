@@ -6,7 +6,7 @@ DEPLOY="$BASE/deploy_vllm4dgx_v022_qwen35b.pl"
 OUT="$BASE/model_benchmark_results.csv"
 LOG="$BASE/model_benchmark_run.log"
 API_KEY="070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098"
-BACKEND=http://192.168.0.14:8000/v1
+BACKEND="${BACKEND:-http://192.168.0.XX:8000/v1}"
 COMMON_ARGS=(--gpu-memory-utilization=0.70 --max-num-seqs=16 --max-model-len=32768 --max-num-batched-tokens=8192 --startup-timeout=2400 --no-chunked-prefill)
 
 echo "model_label,served_model,model_path,start_status,ready_secs,tok_s_1,tok_s_2,tok_s_3,median_tok_s,latency_1,latency_2,latency_3,completion_tokens_1,completion_tokens_2,completion_tokens_3,error" > "$OUT"

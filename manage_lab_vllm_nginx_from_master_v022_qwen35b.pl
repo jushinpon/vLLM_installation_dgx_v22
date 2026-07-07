@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 use strict;
+use FindBin;
 use warnings;
 use JSON::PP qw(encode_json decode_json);
 use File::Path qw(make_path);
@@ -7,10 +8,10 @@ use File::Basename qw(dirname);
 use File::Spec;
 use POSIX qw(strftime);
 
-my $SETUP_DIR       = '/home/dgx-spark-vllm-setup-v022';
+my $SETUP_DIR = $FindBin::Bin;
 my $NGINX_SCRIPT    = 'deploy_nginx_gateway_v022_qwen35b.pl';
 my $GATEWAY_CONFIG  = '/local_opt/lab-vllm-gateway/config/gateway_config.json';
-my $BKEND_SETUP     = '/home/dgx-spark-vllm-setup-v022';
+my $BKEND_SETUP = $FindBin::Bin;
 my $BKEND_SCRIPT    = 'deploy_vllm4dgx_v022_qwen35b.pl';
 
 my %OPT = (
@@ -315,7 +316,7 @@ STATE_DIR="/var/lib/vllm_qwen35b_watchdog"
 FAIL_FILE="\$STATE_DIR/fail_count"
 LAST_RESTART_FILE="\$STATE_DIR/last_restart_epoch"
 
-SETUP_DIR="/home/dgx-spark-vllm-setup-v022"
+SETUP_DIR="$SETUP_DIR"
 MANAGER="\$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
 BACKEND_HOST="$bh"
 BACKEND_PORT="$bp"

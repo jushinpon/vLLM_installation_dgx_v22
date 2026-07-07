@@ -5,7 +5,7 @@ BASE_DIR=/home/dgx-spark-vllm-setup-v022
 MANAGE="$BASE_DIR/manage_lab_vllm_from_master_v022_qwen35b.pl"
 CSV="$BASE_DIR/sweep_results.csv"
 API_KEY="070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098"
-BACKEND_IP="192.168.0.14"
+BACKEND_IP="${BACKEND_IP:-192.168.0.XX}"
 SETUP_DIR_OPT="--backend-setup-dir=/home/dgx-spark-vllm-setup-v022"
 
 # Python parser

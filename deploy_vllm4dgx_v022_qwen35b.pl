@@ -734,8 +734,6 @@ sub find_smoke_script {
     my @candidates = (
         File::Spec->catfile($SCRIPT_DIR, 'smoke_test_vllm_v022_qwen35b_a3b.sh'),
         File::Spec->catfile($SCRIPT_DIR, 'smoke_test_v022_qwen35b_a3b.sh'),
-        '/home/dgx-spark-vllm-setup/smoke_test_vllm_v022_qwen35b_a3b.sh',
-        '/home/dgx-spark-vllm-setup/smoke_test_v022_qwen35b_a3b.sh',
     );
 
     for my $p (@candidates) {

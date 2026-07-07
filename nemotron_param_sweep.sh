@@ -5,7 +5,7 @@ DEPLOY="$BASE/deploy_vllm4dgx_v022_qwen35b.pl"
 OUT="$BASE/nemotron_param_sweep_results.csv"
 LOG="$BASE/nemotron_param_sweep.log"
 API_KEY="070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098"
-BACKEND=http://192.168.0.14:8000/v1
+BACKEND="${BACKEND:-http://192.168.0.XX:8000/v1}"
 MODEL_PATH=/local_opt/vllm-models/nvidia-Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8
 SERVED=nemotron-30b-moe-fp8
 COMMON=(--model-id="$MODEL_PATH" --served-model-name="$SERVED" --startup-timeout=2400 --clear-reasoning-parser --clear-tool-call-parser --no-auto-tool-choice)

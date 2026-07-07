@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 use strict;
+use FindBin;
 use warnings;
 use JSON::PP qw(encode_json decode_json);
 use File::Path qw(make_path remove_tree);
@@ -463,7 +464,7 @@ The backend should already be installed by:
 
 Recommended backend deployment on node09:
 
-  cd /home/dgx-spark-vllm-setup
+  cd /..
 
   perl deploy_vllm4dgx_v022_qwen35b.pl restart \\
     --host=0.0.0.0 \\

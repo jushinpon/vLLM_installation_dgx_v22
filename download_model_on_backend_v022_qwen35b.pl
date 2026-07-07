@@ -1,5 +1,6 @@
 #!/usr/bin/env perl
 use strict;
+use FindBin;
 use warnings;
 use POSIX qw(strftime);
 use File::Basename qw(dirname);
@@ -310,7 +311,7 @@ my %OPT = (
 
     # Current manager/deployment defaults
     manager_script            => 'manage_lab_vllm_from_master_v022_qwen35b.pl',
-    setup_dir                 => '/home/dgx-spark-vllm-setup',
+    setup_dir                 => ,
 
     backend_port              => 8000,
     gateway_port              => 9000,
@@ -1174,7 +1175,7 @@ Current vLLM options:
 
 Deploy-command options:
   --manager-script=manage_lab_vllm_from_master_v022_qwen35b.pl
-  --setup-dir=/home/dgx-spark-vllm-setup
+  --setup-dir=SCRIPT_DIR
 
   --served-model-name=NAME
   --public-model-name=NAME
