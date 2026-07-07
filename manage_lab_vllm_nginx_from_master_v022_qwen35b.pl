@@ -69,6 +69,9 @@ sub main {
         'backend-status'    => sub { backend_action('status') },
         'backend-smoke'     => \&backend_smoke,
         'force-kill-backend'=> \&force_kill_backend,
+        'master-cleanup'    => \&master_cleanup,
+        'install-watchdog'  => \&install_watchdog,
+        'uninstall-watchdog'=> \&uninstall_watchdog,
 
         'gateway-setup'     => sub { run_nginx('setup') },
         'gateway-start'     => sub { run_nginx('start') },
@@ -126,6 +129,9 @@ sub show_status {
 
 sub apply_all {
     print "=== APPLY ALL: backend vLLM + nginx gateway ===\n";
+
+    master_cleanup() if $OPT{with_cleanup};
+    install_watchdog() if $OPT{with_watchdog};
 
     unless ($OPT{skip_backend}) {
         print "\n--- Restarting backend vLLM on $OPT{backend_host} ---\n";
@@ -226,6 +232,299 @@ echo "Killed vLLM processes on $OPT{backend_host}"
     print $out;
 }
 
+sub master_cleanup {
+    print "=== MASTER NODE CLEANUP ===\n";
+    my $ts = strftime('%Y%m%d_%H%M%S', localtime);
+    my $backup_dir = "/root/codex_backups_cluster195/$ts";
+    system("mkdir -p $backup_dir");
+
+    for my $f ('/etc/hosts', '/etc/hostname', '/etc/mail/sendmail.mc', '/etc/mail/sendmail.cf') {
+        system("cp -a $f $backup_dir/") if -f $f;
+    }
+
+    my $hosts = '/etc/hosts';
+    open my $fh, '<', $hosts or die "Cannot read $hosts: $!\n";
+    my @lines = <$fh>;
+    close $fh;
+    my $fixed;
+    my $found;
+    for (@lines) {
+        if (/^\s*192\.168\.0\.101\s+master\s*$/) {
+            $_ = "<master-ip> master.localdomain master\n";
+            $found++;
+        }
+        elsif (/^\s*192\.168\.0\.101\s+.*master/) {
+            $found++;
+        }
+    }
+    unless ($found) {
+        push @lines, "<master-ip> master.localdomain master\n";
+    }
+    open $fh, '>', $hosts or die "Cannot write $hosts: $!\n";
+    print $fh @lines;
+    close $fh;
+    print "  /etc/hosts updated\n";
+
+    system('systemctl disable --now slurmd 2>/dev/null || true');
+    system('systemctl reset-failed slurmd 2>/dev/null || true');
+
+    for my $unit (qw(
+        pmlogger.service pmlogger_daily.timer pmlogger_check.timer
+        pmlogger_daily-poll.timer pmlogger_daily-poll.service
+        pmcd.service pmie.service pmie_daily.timer pmie_check.timer
+    )) {
+        system("systemctl disable --now $unit 2>/dev/null || true");
+        system("systemctl reset-failed $unit 2>/dev/null || true");
+    }
+    print "  slurmd and PCP units disabled\n";
+    print "  Backup: $backup_dir\n";
+    print "MASTER CLEANUP OK\n";
+}
+
+sub install_watchdog {
+    print "=== INSTALL WATCHDOG ===\n";
+
+    my $ts = strftime('%Y%m%d_%H%M%S', localtime);
+    my $backup_dir = "/root/codex_backups_vllm_watchdog/$ts";
+    system("mkdir -p $backup_dir");
+
+    my $watchdog   = '/usr/local/sbin/vllm_qwen35b_watchdog.sh';
+    my $cron_file  = '/etc/cron.d/vllm_qwen35b_watchdog';
+    my $logrotate  = '/etc/logrotate.d/vllm_qwen35b_watchdog';
+
+    for my $f ($watchdog, $cron_file, $logrotate) {
+        system("cp -a $f $backup_dir/") if -f $f;
+    }
+    system("crontab -l > $backup_dir/root_crontab.txt 2>/dev/null || true");
+
+    my $bh   = $OPT{backend_host};
+    my $bp   = $OPT{backend_port};
+    my $mid  = $OPT{model_id};
+    my $smn  = $OPT{served_model_name};
+
+    open my $fh, '>', $watchdog or die "Cannot write $watchdog: $!\n";
+    print $fh <<"WATCHDOG";
+#!/usr/bin/env bash
+set -u
+
+LOCK_FILE="/run/vllm_qwen35b_watchdog.lock"
+LOG_FILE="/var/log/vllm_qwen35b_watchdog.log"
+STATE_DIR="/var/lib/vllm_qwen35b_watchdog"
+FAIL_FILE="\$STATE_DIR/fail_count"
+LAST_RESTART_FILE="\$STATE_DIR/last_restart_epoch"
+
+SETUP_DIR="/home/dgx-spark-vllm-setup-v022"
+MANAGER="\$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
+BACKEND_HOST="$bh"
+BACKEND_PORT="$bp"
+MODEL_ID="$mid"
+SERVED_MODEL="$smn"
+
+FAIL_THRESHOLD=3
+RESTART_COOLDOWN_SEC=900
+PROBE_TIMEOUT_SEC=35
+RESTART_TIMEOUT_SEC=1200
+
+mkdir -p "\$STATE_DIR"
+touch "\$LOG_FILE"
+
+exec 9>"\$LOCK_FILE"
+if ! flock -n 9; then
+  exit 0
+fi
+
+log() {
+  printf '[%s] %s\n' "\$(date '+%F %T %Z')" "\$*" >> "\$LOG_FILE"
+}
+
+read_int_file() {
+  local f="\$1"
+  if [ -f "\$f" ]; then
+    tr -cd '0-9' < "\$f"
+  else
+    printf '0'
+  fi
+}
+
+probe_backend_generation() {
+  ssh -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \\
+    BACKEND_PORT="\$BACKEND_PORT" SERVED_MODEL="\$SERVED_MODEL" PROBE_TIMEOUT_SEC="\$PROBE_TIMEOUT_SEC" \\
+    'python3 - <<'"'"'PY'"'"'
+import json
+import os
+import sys
+import time
+import urllib.request
+
+port = os.environ.get("BACKEND_PORT", "8000")
+model = os.environ.get("SERVED_MODEL", "qwen3.6-35b-a3b-fp8")
+timeout = int(os.environ.get("PROBE_TIMEOUT_SEC", "35"))
+base = f"http://127.0.0.1:{port}"
+
+def fail(msg):
+    print("PROBE_FAIL", msg)
+    sys.exit(1)
+
+try:
+    t0 = time.time()
+    with urllib.request.urlopen(base + "/health", timeout=8) as r:
+        if r.status != 200:
+            fail(f"health_http={r.status}")
+
+    with urllib.request.urlopen(base + "/v1/models", timeout=10) as r:
+        data = json.loads(r.read().decode("utf-8", "replace"))
+    model_ids = [m.get("id", "") for m in data.get("data", [])]
+    if model not in model_ids:
+        fail("model_not_listed=" + ",".join(model_ids))
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply exactly with: OK"}],
+        "max_tokens": 8,
+        "temperature": 0,
+        "stream": False,
+    }
+    req = urllib.request.Request(
+        base + "/v1/chat/completions",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        body = json.loads(r.read().decode("utf-8", "replace"))
+    content = body["choices"][0]["message"].get("content", "").strip()
+    if "OK" not in content.upper():
+        fail("unexpected_content=" + content[:120])
+
+    print("PROBE_OK elapsed_sec=%.2f content=%s" % (time.time() - t0, content[:120]))
+    sys.exit(0)
+except Exception as e:
+    fail(type(e).__name__ + ": " + str(e))
+PY'
+}
+
+restart_backend() {
+  if [ ! -f "\$MANAGER" ]; then
+    log "RESTART_ABORT manager_not_found path=\$MANAGER"
+    return 1
+  fi
+
+  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=131072 text_only=1"
+  (
+    cd "\$SETUP_DIR" &&
+    timeout "\$RESTART_TIMEOUT_SEC" perl "\$MANAGER" backend-restart \\
+      --backend-host="\$BACKEND_HOST" \\
+      --backend-port="\$BACKEND_PORT" \\
+      --model-id="\$MODEL_ID" \\
+      --served-model-name="\$SERVED_MODEL" \\
+      --gpu-memory-utilization=0.85 \\
+      --max-model-len=131072 \\
+      --max-num-batched-tokens=16384 \\
+      --max-num-seqs=4 \\
+      --tool-call-parser=qwen3_coder \\
+      --reasoning-parser=qwen3 \\
+      --disable-thinking
+  ) >> "\$LOG_FILE" 2>&1
+  local rc=\$?
+  date +%s > "\$LAST_RESTART_FILE"
+  if [ "\$rc" -eq 0 ]; then
+    echo 0 > "\$FAIL_FILE"
+    log "RESTART_OK"
+  else
+    log "RESTART_FAIL rc=\$rc"
+  fi
+  return "\$rc"
+}
+
+probe_output="\$(probe_backend_generation 2>&1)"
+probe_rc=\$?
+
+if [ "\$probe_rc" -eq 0 ]; then
+  echo 0 > "\$FAIL_FILE"
+  log "\$probe_output"
+  exit 0
+fi
+
+fail_count="\$(read_int_file "\$FAIL_FILE")"
+fail_count="\${fail_count:-0}"
+fail_count=\$((fail_count + 1))
+echo "\$fail_count" > "\$FAIL_FILE"
+log "PROBE_FAIL count=\$fail_count/\$FAIL_THRESHOLD detail=\$probe_output"
+
+if [ "\$fail_count" -lt "\$FAIL_THRESHOLD" ]; then
+  exit 0
+fi
+
+now="\$(date +%s)"
+last_restart="\$(read_int_file "\$LAST_RESTART_FILE")"
+last_restart="\${last_restart:-0}"
+since_restart=\$((now - last_restart))
+
+if [ "\$last_restart" -gt 0 ] && [ "\$since_restart" -lt "\$RESTART_COOLDOWN_SEC" ]; then
+  log "RESTART_SKIPPED cooldown_active seconds_since_restart=\$since_restart cooldown=\$RESTART_COOLDOWN_SEC"
+  exit 0
+fi
+
+restart_backend
+exit \$?
+WATCHDOG
+    close $fh;
+    chmod 0755, $watchdog or die "chmod $watchdog: $!\n";
+
+    open $fh, '>', $cron_file or die "Cannot write $cron_file: $!\n";
+    print $fh <<'CRON';
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# vLLM generation watchdog for node13 Qwen backend.
+# Runs a real /v1/chat/completions smoke test. Restarts backend after 3 consecutive failures.
+*/2 * * * * root /usr/local/sbin/vllm_qwen35b_watchdog.sh
+CRON
+    close $fh;
+    chmod 0644, $cron_file or die "chmod $cron_file: $!\n";
+
+    open $fh, '>', $logrotate or die "Cannot write $logrotate: $!\n";
+    print $fh <<'LOGROTATE';
+/var/log/vllm_qwen35b_watchdog.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+    copytruncate
+}
+LOGROTATE
+    close $fh;
+    chmod 0644, $logrotate or die "chmod $logrotate: $!\n";
+
+    print "  Watchdog:  $watchdog\n";
+    print "  Cron:      $cron_file\n";
+    print "  Logrotate: $logrotate\n";
+    print "  Backup:    $backup_dir\n";
+    print "INSTALL WATCHDOG OK\n";
+}
+
+sub uninstall_watchdog {
+    print "=== UNINSTALL WATCHDOG ===\n";
+    my $ts = strftime('%Y%m%d_%H%M%S', localtime);
+    my $backup_dir = "/root/codex_backups_vllm_watchdog_uninstall/$ts";
+    system("mkdir -p $backup_dir");
+
+    for my $f ('/usr/local/sbin/vllm_qwen35b_watchdog.sh', '/etc/cron.d/vllm_qwen35b_watchdog', '/etc/logrotate.d/vllm_qwen35b_watchdog') {
+        if (-f $f) {
+            system("cp -a $f $backup_dir/");
+            unlink $f or warn "Cannot remove $f: $!\n";
+            print "  Removed $f\n";
+        }
+    }
+    for my $d ('/var/log/vllm_qwen35b_watchdog.log', '/var/lib/vllm_qwen35b_watchdog', '/run/vllm_qwen35b_watchdog.lock') {
+        unlink $d if -f $d;
+    }
+    rmdir '/var/lib/vllm_qwen35b_watchdog' if -d '/var/lib/vllm_qwen35b_watchdog';
+    print "  Backup: $backup_dir\n";
+    print "UNINSTALL WATCHDOG OK\n";
+}
+
 sub write_gateway_config {
     my %cfg = (
         backend_host           => $OPT{backend_host},
@@ -284,6 +583,8 @@ sub parse_args {
         elsif ($_ eq '--language-model-only') { $OPT{language_model_only} = 1 }
         elsif ($_ eq '--rewrite-model-name') { $OPT{rewrite_model_name} = 1 }
         elsif ($_ eq '--no-rewrite-model-name') { $OPT{rewrite_model_name} = 0 }
+        elsif ($_ eq '--with-cleanup') { $OPT{with_cleanup} = 1 }
+        elsif ($_ eq '--with-watchdog') { $OPT{with_watchdog} = 1 }
         elsif ($_ eq '--vllm-allow-long-max-model-len') { $OPT{vllm_env} = 'VLLM_ALLOW_LONG_MAX_MODEL_LEN=1' }
     }
 }
@@ -301,7 +602,7 @@ Usage: manage_lab_vllm_nginx_from_master_v022_qwen35b.pl ACTION [options]
 
 Actions:
   show, status               Show all status
-  apply-all                  Restart backend vLLM + write gateway config + nginx setup
+  apply-all                  Backend restart + gateway setup [+ --with-cleanup] [+ --with-watchdog]
   restart-all                Restart both backend and gateway
   stop-all                   Stop gateway only
 
@@ -309,6 +610,9 @@ Backend (node13 via SSH):
   backend-start|restart|stop|status
   backend-smoke              Quick health check
   force-kill-backend         Kill all vLLM processes on node13
+  master-cleanup             Disable slurmd + PCP; fix /etc/hosts (local)
+  install-watchdog           Install vLLM watchdog cron + logrotate (local)
+  uninstall-watchdog         Remove watchdog cron + logrotate (local)
 
 Gateway (master nginx):
   gateway-setup              Install nginx + generate config
@@ -333,6 +637,8 @@ Backend options (defaults):
   --no-language-model-only (enable multimodal)
   --vllm-allow-long-max-model-len (override model's max_position_embeddings)
   --skip-backend (skip backend restart in apply-all)
+  --with-cleanup (run master-cleanup before apply-all)
+  --with-watchdog (install watchdog before apply-all)
 
 Gateway options (written to gateway_config.json):
   --max-concurrent-per-student=$OPT{max_concurrent_per_student}

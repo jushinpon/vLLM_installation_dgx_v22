@@ -136,6 +136,15 @@ This:
 2. Writes `gateway_config.json` on master
 3. Regenerates nginx config and reloads
 
+Optionally include `--with-cleanup` and/or `--with-watchdog` to also run master node
+cleanup and install the generation watchdog as part of the deployment:
+
+```bash
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
+  --gpu-memory-utilization=0.85 --max-model-len=262144 \
+  --with-cleanup --with-watchdog
+```
+
 ### Backend only
 
 ```bash
@@ -199,6 +208,19 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl list-students
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl status
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl show
+```
+
+### Master cleanup & watchdog
+
+```bash
+# Fix /etc/hosts, disable slurmd and PCP services
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl master-cleanup
+
+# Install generation watchdog (cron every 2 min, restart after 3 failures)
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl install-watchdog
+
+# Remove watchdog cron + logrotate
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
 ```
 
 ---
@@ -413,15 +435,26 @@ perl deploy_lab_vllm_gateway_v022_qwen35b.pl start
 
 ## Production stability setup
 
-After installing or reinstalling vLLM, apply the production stability patch:
+After installing or reinstalling vLLM, apply the production stability patch in one command:
 
 ```bash
 cd /home/dgx-spark-vllm-setup-v022
-patch_20260630/scripts/03_set_vllm_131k_textonly_and_restart.sh
-patch_20260630/scripts/04_install_vllm_watchdog_cron.sh
-patch_20260630/scripts/05_verify_vllm_watchdog.sh
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all --with-cleanup --with-watchdog
 ```
 
-This configures the backend with `max_model_len=131072`, text-only mode, and installs a cron-based generation watchdog. The watchdog checks `/health`, `/v1/models`, and a real `/v1/chat/completions` smoke test every 2 minutes. After 3 consecutive generation failures, it restarts only the node13 vLLM backend through the manager.
+This runs:
 
-See `patch_20260630/README.md` for full details, including log paths, state files, backup locations, and recovery notes.
+1. **master-cleanup** — Fixes `/etc/hosts` (FQDN), disables `slurmd` and 8 PCP systemd units.
+2. **install-watchdog** — Installs a cron-based generation watchdog that checks `/health`, `/v1/models`, and a real `/v1/chat/completions` smoke test every 2 minutes. After 3 consecutive generation failures, it restarts the node13 backend (with backups).
+3. **backend-restart** — Restarts vLLM with the current parameters.
+4. **gateway-setup** — Regenerates nginx config and reloads.
+
+Individual commands:
+
+```bash
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl master-cleanup
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl install-watchdog
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
+```
+
+See `patch_20260630/README.md` for full details, including watchdog behavior, log paths, state files, backup locations, and recovery notes.
