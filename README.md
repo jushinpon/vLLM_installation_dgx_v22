@@ -26,6 +26,7 @@ Backend vLLM on `node13:8000`.
 ├── deploy_nginx_gateway_v022_qwen35b.pl      # Nginx gateway installer/manager
 ├── manage_lab_vllm_nginx_from_master_v022_qwen35b.pl  # Main orchestrator (nginx)
 ├── deploy_vllm4dgx_v022_qwen35b.pl           # Backend vLLM deployer (node13)
+├── bootstrap_new_cluster_v022_qwen35b.sh     # New-machine bootstrap wrapper
 ├── install_vllm-v022.sh                      # One-click installer
 ├── smoke_test_vllm_v022_qwen35b_a3b.sh       # Backend smoke test
 ├── download_model_on_backend_v022_qwen35b.pl # Model downloader
@@ -84,6 +85,17 @@ Prerequisites before running the bootstrap:
 - Hugging Face access is configured if the selected model requires authentication.
 - The target backend hostname is known, usually `node13` on cluster195.
 
+Recommended end-to-end flow for a fresh machine:
+
+1. Clone this repo on the master node.
+2. Confirm master can SSH to the backend as root without a password.
+3. Confirm the backend has NVIDIA driver/CUDA, enough `/local_opt` disk space, and `uv`.
+4. Run bootstrap with `--dry-run`.
+5. Run bootstrap with `--full-install`.
+6. Verify gateway, backend model name, 128K context, and watchdog log.
+7. Add or rotate student tokens with the gateway manager.
+8. Export the student token as `VLLM_API_KEY` before running benchmarks.
+
 ```bash
 cd /home/vLLM_installation_dgx_v22
 bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
@@ -135,6 +147,9 @@ Expected state:
 - Backend `node13:8000` returns model `qwen3.6-35b-a3b-fp8`.
 - `/v1/models` reports `max_model_len: 131072`.
 - Watchdog log shows `PROBE_OK`.
+
+If Hermes Desktop or another OpenAI-compatible client mis-detects the model as
+32K context, set that client's model context length explicitly to `131072`.
 
 ### 1. Install vLLM on backend (node13)
 
@@ -281,6 +296,35 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl add-student --student-id=
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl list-students
 ```
 
+### Token Management and Secret Safety
+
+Student API tokens live on the master in:
+
+```text
+/local_opt/lab-vllm-gateway/config/students_tokens.json
+```
+
+Rules:
+
+- Never commit real Bearer tokens, student tokens, or Telegram bot tokens.
+- Do not hardcode API keys inside benchmark scripts.
+- Use environment variables for local tests and benchmark runs.
+- If GitGuardian or GitHub reports a leaked token, rotate that student token
+  immediately, reload nginx, update the affected client `.env`, and verify the
+  old token returns `401`.
+
+Typical rotation flow:
+
+```bash
+perl deploy_nginx_gateway_v022_qwen35b.pl remove-student --student-id=jsp
+perl deploy_nginx_gateway_v022_qwen35b.pl add-student --student-id=jsp
+perl deploy_nginx_gateway_v022_qwen35b.pl list-students
+nginx -t && systemctl reload nginx
+```
+
+Then update clients that use the old token, for example Hermes Desktop's
+`OPENAI_API_KEY`, without writing the token into this git repo.
+
 ### Status
 
 ```bash
@@ -404,6 +448,13 @@ perl ./test_vllm_ps_v022_qwen35b_a3b.pl
 ---
 
 ## Benchmarking
+
+Benchmark scripts read the gateway token from `VLLM_API_KEY`.
+Set it in the shell before running benchmarks:
+
+```bash
+export VLLM_API_KEY='<student-token>'
+```
 
 ```bash
 # Token rate
