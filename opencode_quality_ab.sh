@@ -4,18 +4,22 @@ BASE=/home/dgx-spark-vllm-setup-v022
 DEPLOY="$BASE/deploy_vllm4dgx_v022_qwen35b.pl"
 OUT="$BASE/opencode_quality_ab_results.jsonl"
 LOG="$BASE/opencode_quality_ab_run.log"
-API_KEY="070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098"
+API_KEY="${VLLM_API_KEY:-}"
+if [[ -z "$API_KEY" ]]; then
+  echo "Set VLLM_API_KEY before running this benchmark." >&2
+  exit 1
+fi
 BACKEND="${BACKEND:-http://192.168.0.XX:8000/v1}"
 COMMON=(--gpu-memory-utilization=0.70 --max-num-seqs=16 --max-model-len=32768 --max-num-batched-tokens=8192 --startup-timeout=2400 --no-chunked-prefill)
 : > "$OUT"
 echo "=== opencode quality A/B started $(date) ===" > "$LOG"
 wait_model(){ local m="$1"; for _ in $(seq 1 240); do curl -s --max-time 5 "$BACKEND/models" | grep -q "$m" && return 0; sleep 5; done; return 1; }
-run_prompt(){ local label="$1" served="$2" task_id="$3" prompt="$4"; python3 - "$OUT" "$label" "$served" "$task_id" "$prompt" "$BACKEND" <<'PY'
+run_prompt(){ local label="$1" served="$2" task_id="$3" prompt="$4"; python3 - "$OUT" "$label" "$served" "$task_id" "$prompt" "$BACKEND" "$API_KEY" <<'PY'
 import json, sys, time, urllib.request
-out,label,model,task_id,prompt,backend=sys.argv[1:]
+out,label,model,task_id,prompt,backend,api_key=sys.argv[1:]
 body={"model":model,"messages":[{"role":"system","content":"You are an expert coding agent. Answer concisely but show enough reasoning to be auditable. Do not use tools."},{"role":"user","content":prompt}],"max_tokens":900,"temperature":0.0}
 data=json.dumps(body).encode()
-req=urllib.request.Request(backend+'/chat/completions',data=data,headers={'Content-Type':'application/json','Authorization':'Bearer 070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098'})
+req=urllib.request.Request(backend+'/chat/completions',data=data,headers={'Content-Type':'application/json','Authorization':'Bearer '+api_key})
 t0=time.time()
 try:
     resp=json.loads(urllib.request.urlopen(req, timeout=240).read().decode())

@@ -5,7 +5,11 @@ BASE=/home/dgx-spark-vllm-setup-v022
 DEPLOY="$BASE/deploy_vllm4dgx_v022_qwen35b.pl"
 OUT="$BASE/model_benchmark_results.csv"
 LOG="$BASE/model_benchmark_run.log"
-API_KEY="070279fe547d73e6e8506b26afe9bb1f96f9bf26613c46cf01c26fecfd9a9098"
+API_KEY="${VLLM_API_KEY:-}"
+if [[ -z "$API_KEY" ]]; then
+  echo "Set VLLM_API_KEY before running benchmarks." >&2
+  exit 1
+fi
 BACKEND="${BACKEND:-http://192.168.0.XX:8000/v1}"
 COMMON_ARGS=(--gpu-memory-utilization=0.70 --max-num-seqs=16 --max-model-len=32768 --max-num-batched-tokens=8192 --startup-timeout=2400 --no-chunked-prefill)
 
