@@ -248,17 +248,19 @@ sub master_cleanup {
     close $fh;
     my $fixed;
     my $found;
+    my $master_ip = (split ' ', `hostname -I 2>/dev/null`)[0]
+        or die "Cannot detect master IP via hostname -I\n";
     for (@lines) {
-        if (/^\s*192\.168\.0\.101\s+master\s*$/) {
-            $_ = "<master-ip> master.localdomain master\n";
+        if (/^\s*\Q$master_ip\E\s+master\s*$/) {
+            $_ = "$master_ip master.localdomain master\n";
             $found++;
         }
-        elsif (/^\s*192\.168\.0\.101\s+.*master/) {
+        elsif (/^\s*\Q$master_ip\E\s+.*master/) {
             $found++;
         }
     }
     unless ($found) {
-        push @lines, "<master-ip> master.localdomain master\n";
+        push @lines, "$master_ip master.localdomain master\n";
     }
     open $fh, '>', $hosts or die "Cannot write $hosts: $!\n";
     print $fh @lines;
