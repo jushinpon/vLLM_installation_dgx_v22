@@ -75,6 +75,15 @@ cluster. It copies the repo to the backend node, installs vLLM, downloads the
 Qwen3.6 35B A3B FP8 model, deploys the backend and nginx gateway, and installs
 the cron watchdog.
 
+Prerequisites before running the bootstrap:
+
+- Run from the master node.
+- Passwordless SSH from master to backend works, for example `ssh root@node13 hostname`.
+- Backend has a working NVIDIA driver, CUDA runtime, `nvidia-smi`, and enough disk space under `/local_opt`.
+- `uv` is installed on the backend, or install it first with the standard Astral `uv` installer.
+- Hugging Face access is configured if the selected model requires authentication.
+- The target backend hostname is known, usually `node13` on cluster195.
+
 ```bash
 cd /home/vLLM_installation_dgx_v22
 bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
@@ -110,6 +119,22 @@ bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
   --backend-host=node13 \
   --dry-run
 ```
+
+After bootstrap, verify the deployment:
+
+```bash
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl status
+curl -s http://127.0.0.1:9000/healthz
+ssh node13 curl -s http://127.0.0.1:8000/v1/models
+tail -20 /var/log/vllm_qwen35b_watchdog.log
+```
+
+Expected state:
+
+- Gateway is active on master port `9000`.
+- Backend `node13:8000` returns model `qwen3.6-35b-a3b-fp8`.
+- `/v1/models` reports `max_model_len: 131072`.
+- Watchdog log shows `PROBE_OK`.
 
 ### 1. Install vLLM on backend (node13)
 
@@ -192,8 +217,17 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
-  --gpu-memory-utilization=0.85 --max-model-len=131072 \
-  --max-num-seqs=4 --max-num-batched-tokens=16384 ...
+  --backend-host=node13 \
+  --backend-port=8000 \
+  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
+  --served-model-name=qwen3.6-35b-a3b-fp8 \
+  --gpu-memory-utilization=0.85 \
+  --max-model-len=131072 \
+  --max-num-seqs=4 \
+  --max-num-batched-tokens=16384 \
+  --tool-call-parser=qwen3_coder \
+  --reasoning-parser=qwen3 \
+  --disable-thinking
 ```
 
 ### Gateway only (skip backend restart)
