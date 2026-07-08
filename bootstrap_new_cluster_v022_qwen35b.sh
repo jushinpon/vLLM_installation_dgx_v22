@@ -185,7 +185,9 @@ apply_args=(
   --max-num-batched-tokens="$MAX_NUM_BATCHED_TOKENS"
   --tool-call-parser=qwen3_coder
   --reasoning-parser=qwen3
-  --disable-thinking
+  --enable-thinking
+  --no-language-model-only
+  '--limit-mm-per-prompt={"image":1}'
   --max-concurrent-per-student="$MAX_CONCURRENT_PER_STUDENT"
   --rpm-limit="$RPM_LIMIT"
   --client-timeout="$CLIENT_TIMEOUT"

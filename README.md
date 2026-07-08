@@ -120,6 +120,9 @@ gpu_memory_utilization=0.85
 max_model_len=131072
 max_num_batched_tokens=16384
 max_num_seqs=4
+thinking=enabled
+multimodal_image_input=enabled
+limit_mm_per_prompt={"image":1}
 gateway_port=9000
 watchdog=enabled
 ```
@@ -205,8 +208,9 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --disable-thinking \
-  --language-model-only \
+  --enable-thinking \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":1}' \
   --max-concurrent-per-student=6 \
   --rpm-limit=120 \
   --client-timeout=300 \
@@ -242,7 +246,9 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --disable-thinking
+  --enable-thinking \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":1}'
 ```
 
 ### Gateway only (skip backend restart)
@@ -361,9 +367,11 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--max-num-batched-tokens` | `16384` | Max tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
-| `--disable-thinking` | on | Disable thinking/reasoning in output |
-| `--language-model-only` | on | Text-only mode (disable vision) |
-| `--no-language-model-only` | off | Enable multimodal (image input) |
+| `--enable-thinking` | on | Keep Qwen reasoning/thinking output enabled |
+| `--disable-thinking` | off | Disable thinking/reasoning in output |
+| `--no-language-model-only` | on | Enable multimodal image input |
+| `--language-model-only` | off | Text-only mode (disable vision) |
+| `--limit-mm-per-prompt` | `{"image":1}` | Allow one image per prompt |
 | `--vllm-allow-long-max-model-len` | off | Override model's max position embeddings |
 
 ---

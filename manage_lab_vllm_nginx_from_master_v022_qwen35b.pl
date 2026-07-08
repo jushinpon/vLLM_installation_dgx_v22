@@ -304,6 +304,13 @@ sub install_watchdog {
     my $bp   = $OPT{backend_port};
     my $mid  = $OPT{model_id};
     my $smn  = $OPT{served_model_name};
+    my $watchdog_language_only = $OPT{language_model_only} ? 1 : 0;
+    my $watchdog_thinking      = $OPT{disable_thinking} ? 'disabled' : 'default';
+    my $watchdog_extra_args    = '';
+    $watchdog_extra_args .= "      --no-language-model-only \\\n" if !$OPT{language_model_only};
+    $watchdog_extra_args .= "      --limit-mm-per-prompt=" . shell_quote($OPT{limit_mm_per_prompt}) . " \\\n"
+        if $OPT{limit_mm_per_prompt};
+    $watchdog_extra_args .= "      --disable-thinking \\\n" if $OPT{disable_thinking};
 
     open my $fh, '>', $watchdog or die "Cannot write $watchdog: $!\n";
     print $fh <<"WATCHDOG";
@@ -386,6 +393,7 @@ try:
         "max_tokens": 8,
         "temperature": 0,
         "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     req = urllib.request.Request(
         base + "/v1/chat/completions",
@@ -395,7 +403,7 @@ try:
     )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         body = json.loads(r.read().decode("utf-8", "replace"))
-    content = body["choices"][0]["message"].get("content", "").strip()
+    content = (body["choices"][0]["message"].get("content") or "").strip()
     if "OK" not in content.upper():
         fail("unexpected_content=" + content[:120])
 
@@ -412,7 +420,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=131072 text_only=1"
+  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=131072 language_only=$watchdog_language_only thinking=$watchdog_thinking"
   (
     cd "\$SETUP_DIR" &&
     timeout "\$RESTART_TIMEOUT_SEC" perl "\$MANAGER" backend-restart \\
@@ -426,7 +434,7 @@ restart_backend() {
       --max-num-seqs=4 \\
       --tool-call-parser=qwen3_coder \\
       --reasoning-parser=qwen3 \\
-      --disable-thinking
+$watchdog_extra_args      --smoke-test-after-start
   ) >> "\$LOG_FILE" 2>&1
   local rc=\$?
   date +%s > "\$LAST_RESTART_FILE"
