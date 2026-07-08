@@ -122,7 +122,7 @@ max_num_batched_tokens=16384
 max_num_seqs=4
 thinking=enabled
 multimodal_image_input=enabled
-limit_mm_per_prompt={"image":1}
+limit_mm_per_prompt={"image":4}
 gateway_port=9000
 watchdog=enabled
 ```
@@ -210,7 +210,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --reasoning-parser=qwen3 \
   --enable-thinking \
   --no-language-model-only \
-  --limit-mm-per-prompt='{"image":1}' \
+  --limit-mm-per-prompt='{"image":4}' \
   --max-concurrent-per-student=6 \
   --rpm-limit=120 \
   --client-timeout=300 \
@@ -248,7 +248,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --reasoning-parser=qwen3 \
   --enable-thinking \
   --no-language-model-only \
-  --limit-mm-per-prompt='{"image":1}'
+  --limit-mm-per-prompt='{"image":4}'
 ```
 
 ### Gateway only (skip backend restart)
@@ -371,7 +371,7 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--disable-thinking` | off | Disable thinking/reasoning in output |
 | `--no-language-model-only` | on | Enable multimodal image input |
 | `--language-model-only` | off | Text-only mode (disable vision) |
-| `--limit-mm-per-prompt` | `{"image":1}` | Allow one image per prompt |
+| `--limit-mm-per-prompt` | `{"image":4}` | Allow up to four images per prompt |
 | `--vllm-allow-long-max-model-len` | off | Override model's max position embeddings |
 
 ---

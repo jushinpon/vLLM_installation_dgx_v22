@@ -20,7 +20,7 @@ use Cwd qw(abs_path getcwd);
 #   readiness. It now supports multimodal settings for Qwen3.6 A3B, including:
 #
 #     --no-language-model-only
-#     --limit-mm-per-prompt='{"image":1}'
+#     --limit-mm-per-prompt='{"image":4}'
 #
 # Important:
 #   - For text-only Hermes/OpenClaw, keep default --language-model-only.
@@ -251,7 +251,7 @@ Important multimodal options:
   --no-language-model-only
       Do not pass --language-model-only. Required for image/video/audio input.
 
-  --limit-mm-per-prompt='{"image":1}'
+  --limit-mm-per-prompt='{"image":4}'
       Allow and limit multimodal inputs per prompt. For example image=1.
 
   --allowed-local-media-path=/local_opt/vllm-media
@@ -288,7 +288,7 @@ Examples:
       --reasoning-parser=qwen3 \
       --disable-thinking \
       --no-language-model-only \
-      --limit-mm-per-prompt='{"image":1}'
+      --limit-mm-per-prompt='{"image":4}'
 USAGE
 }
 
