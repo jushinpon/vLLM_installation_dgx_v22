@@ -88,6 +88,17 @@ my %OPT = (
 );
 
 parse_args(\%OPT, \@ARGV);
+
+
+sub thinking_status {
+    my ($cfg) = @_;
+    return 'disabled' if $cfg->{disable_thinking};
+    my $kwargs = $cfg->{default_chat_template_kwargs} || '';
+    return 'enabled' if $kwargs =~ /"enable_thinking"\s*:\s*true/i;
+    return 'disabled' if $kwargs =~ /"enable_thinking"\s*:\s*false/i;
+    return 'default';
+}
+
 apply_derived_options(\%OPT);
 
 my $HOSTNAME = sanitize_name(chomped(`hostname`)) || 'node09';
@@ -192,7 +203,8 @@ sub parse_args {
         }
         elsif ($arg eq '--enable-thinking') {
             $opt->{disable_thinking} = 0;
-            $opt->{default_chat_template_kwargs} = '';
+            $opt->{default_chat_template_kwargs} = '{"enable_thinking": true}'
+                unless defined($opt->{default_chat_template_kwargs}) && $opt->{default_chat_template_kwargs} ne '';
         }
         elsif ($arg eq '--help' || $arg eq '-h') {
             usage();
@@ -593,7 +605,7 @@ sub start_server {
     print "Model arg : $cfg->{model_arg}\n";
     print "Served   : $cfg->{served_model_name}\n";
     print "Chat kwargs: " . ($cfg->{default_chat_template_kwargs} || '(not passed)') . "\n";
-    print "Thinking  : " . ($cfg->{disable_thinking} ? 'disabled' : 'default') . "\n";
+    print "Thinking  : " . thinking_status($cfg) . "\n";
     print "Language-only: " . ($cfg->{language_model_only} ? 'yes' : 'no') . "\n";
     print "MM limit  : " . ($cfg->{limit_mm_per_prompt} || '(not passed)') . "\n";
     print "Waiting for API readiness: $base\n";
@@ -671,7 +683,7 @@ sub show_status {
         print "KV dtype  : " . ($cfg->{kv_cache_dtype} || '(not passed)') . "\n";
         print "Device    : " . ($cfg->{device} || '(not passed)') . "\n";
         print "Chat kwargs: " . ($cfg->{default_chat_template_kwargs} || '(not passed)') . "\n";
-        print "Thinking  : " . ($cfg->{disable_thinking} ? 'disabled' : 'default') . "\n";
+        print "Thinking  : " . thinking_status($cfg) . "\n";
         print "Language-only: " . ($cfg->{language_model_only} ? 'yes' : 'no') . "\n";
         print "MM limit  : " . ($cfg->{limit_mm_per_prompt} || '(not passed)') . "\n";
         print "Tool pars.: " . ($cfg->{tool_call_parser} || '(disabled)') . "\n";

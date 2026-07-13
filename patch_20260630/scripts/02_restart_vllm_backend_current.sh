@@ -20,4 +20,4 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-seqs=4 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --disable-thinking
+  --enable-thinking

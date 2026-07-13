@@ -30,8 +30,8 @@ my %OPT = (
     max_num_seqs           => '4',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_coder',
-    disable_thinking       => 1,
-    default_chat_template_kwargs => '{"enable_thinking": false}',
+    disable_thinking       => 0,
+    default_chat_template_kwargs => '{"enable_thinking": true}',
     kv_cache_dtype         => '',
     device                 => '',
     language_model_only    => 1,
@@ -180,6 +180,7 @@ sub backend_action {
         push @cmd, "--device=$OPT{device}" if $OPT{device};
         push @cmd, '--no-language-model-only' if !$OPT{language_model_only};
         push @cmd, "--limit-mm-per-prompt=$OPT{limit_mm_per_prompt}" if $OPT{limit_mm_per_prompt};
+        push @cmd, "--default-chat-template-kwargs=$OPT{default_chat_template_kwargs}" if $OPT{default_chat_template_kwargs};
         push @cmd, '--disable-thinking' if $OPT{disable_thinking};
         push @cmd, "--api-key=$OPT{backend_api_key}" if $OPT{backend_api_key};
         push @cmd, '--smoke-test-after-start' if $OPT{smoke_test_after_start};
@@ -305,8 +306,10 @@ sub install_watchdog {
     my $mid  = $OPT{model_id};
     my $smn  = $OPT{served_model_name};
     my $watchdog_language_only = $OPT{language_model_only} ? 1 : 0;
-    my $watchdog_thinking      = $OPT{disable_thinking} ? 'disabled' : 'default';
+    my $watchdog_thinking      = $OPT{disable_thinking} ? 'disabled' : ($OPT{default_chat_template_kwargs} ? 'enabled' : 'default');
     my $watchdog_extra_args    = '';
+    $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
+        if $OPT{default_chat_template_kwargs};
     $watchdog_extra_args .= "      --no-language-model-only \\\n" if !$OPT{language_model_only};
     $watchdog_extra_args .= "      --limit-mm-per-prompt=" . shell_quote($OPT{limit_mm_per_prompt}) . " \\\n"
         if $OPT{limit_mm_per_prompt};
@@ -588,8 +591,8 @@ sub parse_args {
             $OPT{$k} = $v if exists $OPT{$k};
         }
         elsif ($_ eq '--skip-backend') { $OPT{skip_backend} = 1 }
-        elsif ($_ eq '--disable-thinking') { $OPT{disable_thinking} = 1 }
-        elsif ($_ eq '--enable-thinking') { $OPT{disable_thinking} = 0 }
+        elsif ($_ eq '--disable-thinking') { $OPT{disable_thinking} = 1; $OPT{default_chat_template_kwargs} = '{"enable_thinking": false}' }
+        elsif ($_ eq '--enable-thinking') { $OPT{disable_thinking} = 0; $OPT{default_chat_template_kwargs} = '{"enable_thinking": true}' }
         elsif ($_ eq '--no-language-model-only') { $OPT{language_model_only} = 0 }
         elsif ($_ eq '--language-model-only') { $OPT{language_model_only} = 1 }
         elsif ($_ eq '--rewrite-model-name') { $OPT{rewrite_model_name} = 1 }
@@ -644,7 +647,8 @@ Backend options (defaults):
   --max-num-batched-tokens=$OPT{max_num_batched_tokens}
   --reasoning-parser=qwen3
   --tool-call-parser=qwen3_coder
-  --disable-thinking
+  --enable-thinking / --disable-thinking
+  --default-chat-template-kwargs='{"enable_thinking": true}'
   --no-language-model-only (enable multimodal)
   --vllm-allow-long-max-model-len (override model's max_position_embeddings)
   --skip-backend (skip backend restart in apply-all)

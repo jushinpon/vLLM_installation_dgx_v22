@@ -145,7 +145,7 @@ restart_backend() {
       --max-num-seqs=4 \
       --tool-call-parser=qwen3_coder \
       --reasoning-parser=qwen3 \
-      --disable-thinking
+      --enable-thinking
   ) >> "$LOG_FILE" 2>&1
   local rc=$?
   date +%s > "$LAST_RESTART_FILE"
