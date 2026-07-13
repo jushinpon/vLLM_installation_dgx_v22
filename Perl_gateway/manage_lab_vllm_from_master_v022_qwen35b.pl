@@ -33,7 +33,7 @@ use HTTP::Tiny;
 #       --default-chat-template-kwargs '{"enable_thinking": false}'
 #
 #   --no-language-model-only
-#   --limit-mm-per-prompt='{"image":1}'
+#   --limit-mm-per-prompt='{"image":4}'
 #     allow multimodal/image input if the backend deployer also supports them.
 #
 # Recommended production apply-all:
@@ -76,7 +76,7 @@ use HTTP::Tiny;
 #     --reasoning-parser=qwen3 \
 #     --disable-thinking \
 #     --no-language-model-only \
-#     --limit-mm-per-prompt='{"image":1}' \
+#     --limit-mm-per-prompt='{"image":4}' \
 #     --max-concurrent-per-student=4 \
 #     --rpm-limit=60 \
 #     --client-timeout=60 \
@@ -934,7 +934,7 @@ Recommended multimodal Qwen3.6 A3B deployment:
     --reasoning-parser=qwen3 \
     --disable-thinking \
     --no-language-model-only \
-    --limit-mm-per-prompt='{"image":1}' \
+    --limit-mm-per-prompt='{"image":4}' \
     --max-concurrent-per-student=4 \
     --rpm-limit=60 \
     --client-timeout=60 \
@@ -960,7 +960,7 @@ Backend vLLM options:
 Multimodal backend options:
   --no-language-model-only
   --language-model-only
-  --limit-mm-per-prompt='{"image":1}'
+  --limit-mm-per-prompt='{"image":4}'
   --media-io-kwargs='...'
   --allowed-local-media-path=/path
   --allowed-media-domains=domain1,domain2

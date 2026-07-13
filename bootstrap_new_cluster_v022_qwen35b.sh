@@ -187,7 +187,7 @@ apply_args=(
   --reasoning-parser=qwen3
   --enable-thinking
   --no-language-model-only
-  '--limit-mm-per-prompt={"image":1}'
+  '--limit-mm-per-prompt={"image":4}'
   --max-concurrent-per-student="$MAX_CONCURRENT_PER_STUDENT"
   --rpm-limit="$RPM_LIMIT"
   --client-timeout="$CLIENT_TIMEOUT"
