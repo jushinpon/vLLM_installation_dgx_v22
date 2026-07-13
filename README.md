@@ -117,7 +117,7 @@ Default production settings used by the bootstrap:
 model_id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8
 served_model_name=qwen3.6-35b-a3b-fp8
 gpu_memory_utilization=0.85
-max_model_len=131072
+max_model_len=262144
 max_num_batched_tokens=16384
 max_num_seqs=4
 thinking=enabled
@@ -148,11 +148,11 @@ Expected state:
 
 - Gateway is active on master port `9000`.
 - Backend `node13:8000` returns model `qwen3.6-35b-a3b-fp8`.
-- `/v1/models` reports `max_model_len: 131072`.
+- `/v1/models` reports `max_model_len: 262144`.
 - Watchdog log shows `PROBE_OK`.
 
 If Hermes Desktop or another OpenAI-compatible client mis-detects the model as
-32K context, set that client's model context length explicitly to `131072`.
+32K context, set that client's model context length explicitly to `262144`.
 
 ### 1. Install vLLM on backend (node13)
 
@@ -203,7 +203,7 @@ This installs nginx, opens port 9000 in firewalld, enables SELinux network conne
 cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=131072 \
+  --max-model-len=262144 \
   --max-num-seqs=4 \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
@@ -228,7 +228,7 @@ cleanup and install the generation watchdog as part of the deployment:
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
-  --gpu-memory-utilization=0.85 --max-model-len=131072 \
+  --gpu-memory-utilization=0.85 --max-model-len=262144 \
   --with-cleanup --with-watchdog
 ```
 
@@ -241,7 +241,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
   --served-model-name=qwen3.6-35b-a3b-fp8 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=131072 \
+  --max-model-len=262144 \
   --max-num-seqs=4 \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
@@ -362,7 +362,7 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8` | Model path or HF ID |
 | `--served-model-name` | `qwen3.6-35b-a3b-fp8` | Model name exposed by API |
 | `--gpu-memory-utilization` | `0.85` | Fraction of GPU memory for KV cache |
-| `--max-model-len` | `131072` | Maximum context length |
+| `--max-model-len` | `262144` | Maximum context length |
 | `--max-num-seqs` | `4` | Max concurrent sequences |
 | `--max-num-batched-tokens` | `16384` | Max tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
@@ -522,10 +522,10 @@ bash opencode_quality_ab.sh
 
 | Context | `max-model-len` | `max-num-seqs` | `gpu-memory-utilization` |
 |---------|----------------|---------------|--------------------------|
-| 128K validated | 131072 | 4 | 0.85 |
+| 262K current production | 262144 | 4 | 0.85 |
 | 64K safer fallback | 65536 | 8 | 0.75 |
 | 32K conservative fallback | 32768 | 16 | 0.70 |
-| 262K experimental | 262144 | 4 | 0.85 (may need lower batch/sequences) |
+| 128K validated fallback | 131072 | 4 | 0.85 |
 | 320K | 327680 | 4 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 | 520K | 520000 | 2 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 

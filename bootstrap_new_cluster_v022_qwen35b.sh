@@ -12,7 +12,7 @@ SERVED_MODEL_NAME="qwen3.6-35b-a3b-fp8"
 GATEWAY_PORT="9000"
 BACKEND_PORT="8000"
 GPU_MEMORY_UTILIZATION="0.85"
-MAX_MODEL_LEN="131072"
+MAX_MODEL_LEN="262144"
 MAX_NUM_SEQS="4"
 MAX_NUM_BATCHED_TOKENS="16384"
 RPM_LIMIT="120"
@@ -49,7 +49,7 @@ Common options:
   --gateway-port PORT          Master nginx gateway port (default: 9000)
   --backend-port PORT          Backend vLLM port (default: 8000)
   --gpu-memory-utilization N   vLLM GPU memory utilization (default: 0.85)
-  --max-model-len N            vLLM max context length (default: 131072)
+  --max-model-len N            vLLM max context length (default: 262144)
   --max-num-seqs N             vLLM max concurrent sequences (default: 4)
   --max-num-batched-tokens N   vLLM max batched tokens (default: 16384)
   --rpm-limit N                Gateway per-token request limit (default: 120)

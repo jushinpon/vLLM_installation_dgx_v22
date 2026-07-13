@@ -25,7 +25,7 @@ my %OPT = (
     public_model_name      => 'qwen3.6-35b-a3b-fp8',
     backend_model_name     => 'qwen3.6-35b-a3b-fp8',
     gpu_memory_utilization => '0.85',
-    max_model_len          => '131072',
+    max_model_len          => '262144',
     max_num_batched_tokens => '16384',
     max_num_seqs           => '4',
     reasoning_parser       => 'qwen3',
@@ -420,7 +420,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=131072 language_only=$watchdog_language_only thinking=$watchdog_thinking"
+  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=262144 language_only=$watchdog_language_only thinking=$watchdog_thinking"
   (
     cd "\$SETUP_DIR" &&
     timeout "\$RESTART_TIMEOUT_SEC" perl "\$MANAGER" backend-restart \\
@@ -429,7 +429,7 @@ restart_backend() {
       --model-id="\$MODEL_ID" \\
       --served-model-name="\$SERVED_MODEL" \\
       --gpu-memory-utilization=0.85 \\
-      --max-model-len=131072 \\
+      --max-model-len=262144 \\
       --max-num-batched-tokens=16384 \\
       --max-num-seqs=4 \\
       --tool-call-parser=qwen3_coder \\

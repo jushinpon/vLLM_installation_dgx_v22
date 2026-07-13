@@ -103,7 +103,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=131072 text_only=1"
+  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 text_only=1"
   (
     cd "$SETUP_DIR" &&
     timeout "$RESTART_TIMEOUT_SEC" perl "$MANAGER" backend-restart \
@@ -112,7 +112,7 @@ restart_backend() {
       --model-id="$MODEL_ID" \
       --served-model-name="$SERVED_MODEL" \
       --gpu-memory-utilization=0.85 \
-      --max-model-len=131072 \
+      --max-model-len=262144 \
       --max-num-batched-tokens=16384 \
       --max-num-seqs=4 \
       --tool-call-parser=qwen3_coder \
