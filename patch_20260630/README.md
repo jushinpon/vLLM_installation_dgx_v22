@@ -49,22 +49,48 @@ Restart (or start) the vLLM API server on `node13`:
 perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart
 ```
 
-Default production policy: `--max-model-len=262144`, `--default-chat-template-kwargs='{"enable_thinking": true}'`, and `--limit-mm-per-prompt='{"image":4}'`. Override as needed:
+Default production policy is optimized for ten text-only Hermes users:
+`--max-model-len=131072`, Qwen MTP with three draft tokens, throughput mode,
+optimization level 2, and `--max-num-seqs=10`. The server keeps thinking
+enabled by default; Hermes clients can disable it per request.
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
   --served-model-name=qwen3.6-27b-fp8 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=262144 \
+  --max-model-len=131072 \
   --max-num-batched-tokens=16384 \
-  --max-num-seqs=4 \
+  --max-num-seqs=10 \
   --reasoning-parser=qwen3 \
   --tool-call-parser=qwen3_coder \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
-  --no-language-model-only \
-  --limit-mm-per-prompt='{"image":4}'
+  --language-model-only \
+  --speculative-method=qwen3_next_mtp \
+  --num-speculative-tokens=3 \
+  --performance-mode=throughput \
+  --optimization-level=2
 ```
+
+### Measured performance (node13)
+
+Fixed 256-token output benchmark:
+
+| Concurrent requests | Aggregate output rate | Median latency |
+|--------------------:|----------------------:|---------------:|
+| 1 | 21.58 tok/s | 11.86 s |
+| 4 | 60.90 tok/s | 14.63 s |
+| 10 | 153.80 tok/s | 15.99 s |
+
+Three 10-user stability runs with 512 output tokens reached 171.18, 173.59,
+and 169.91 aggregate tok/s. All 50 final-candidate requests completed with
+zero errors and zero aborts. MTP accepted 14,142 of 15,660 draft tokens
+(90.3%).
+
+The best profile is text-only. Image input is intentionally disabled. The
+131,072-token context provides about 965,099 KV-cache tokens on node13, or
+about 7.36 simultaneous full-length contexts; ten users are supported when
+their active prompts are shorter than the full context limit.
 
 Other backend actions:
 
@@ -125,6 +151,11 @@ Installed files:
 
 Backups of any previous files go to `/root/codex_backups_vllm_watchdog/<timestamp>/`.
 
+The generated restart command uses the same production values as the manager:
+131,072 context, text-only, `max-num-seqs=10`, MTP=3, throughput mode, and O2.
+The backend deployer also takes an exclusive service lock, so watchdog and
+manual restart commands cannot launch competing vLLM processes.
+
 To remove:
 
 ```bash
@@ -144,6 +175,17 @@ perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen
 ```
 
 Use `--skip-backend` to skip the backend restart step.
+
+For a clean future reinstall, clone this repository and run:
+
+```bash
+cd /home/vLLM_installation_dgx_v22
+bash bootstrap_new_cluster_v022_qwen35b.sh --full-install \
+  --backend-host=node13
+```
+
+The bootstrap installs the watchdog automatically unless `--no-watchdog` is
+specified. No manual copying from this patch directory is required.
 
 ---
 

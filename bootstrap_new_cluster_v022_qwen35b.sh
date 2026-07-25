@@ -12,8 +12,8 @@ SERVED_MODEL_NAME="qwen3.6-27b-fp8"
 GATEWAY_PORT="9000"
 BACKEND_PORT="8000"
 GPU_MEMORY_UTILIZATION="0.85"
-MAX_MODEL_LEN="262144"
-MAX_NUM_SEQS="4"
+MAX_MODEL_LEN="131072"
+MAX_NUM_SEQS="10"
 MAX_NUM_BATCHED_TOKENS="16384"
 RPM_LIMIT="120"
 MAX_CONCURRENT_PER_STUDENT="6"
@@ -49,8 +49,8 @@ Common options:
   --gateway-port PORT          Master nginx gateway port (default: 9000)
   --backend-port PORT          Backend vLLM port (default: 8000)
   --gpu-memory-utilization N   vLLM GPU memory utilization (default: 0.85)
-  --max-model-len N            vLLM max context length (default: 262144)
-  --max-num-seqs N             vLLM max concurrent sequences (default: 4)
+  --max-model-len N            vLLM max context length (default: 131072)
+  --max-num-seqs N             vLLM max concurrent sequences (default: 10)
   --max-num-batched-tokens N   vLLM max batched tokens (default: 16384)
   --rpm-limit N                Gateway per-token request limit (default: 120)
   --max-concurrent N           Gateway per-student concurrency (default: 6)
@@ -186,8 +186,11 @@ apply_args=(
   --tool-call-parser=qwen3_coder
   --reasoning-parser=qwen3
   --enable-thinking
-  --no-language-model-only
-  '--limit-mm-per-prompt={"image":4}'
+  --language-model-only
+  --speculative-method=qwen3_next_mtp
+  --num-speculative-tokens=3
+  --performance-mode=throughput
+  --optimization-level=2
   --max-concurrent-per-student="$MAX_CONCURRENT_PER_STUDENT"
   --rpm-limit="$RPM_LIMIT"
   --client-timeout="$CLIENT_TIMEOUT"

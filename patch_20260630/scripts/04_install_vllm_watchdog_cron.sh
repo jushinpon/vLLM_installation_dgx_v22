@@ -132,7 +132,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 language_only=0 thinking=enabled"
+  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=131072 max_num_seqs=10 language_only=1 thinking=enabled"
   (
     cd "$SETUP_DIR" &&
     timeout "$RESTART_TIMEOUT_SEC" perl "$MANAGER" backend-restart \
@@ -141,14 +141,17 @@ restart_backend() {
       --model-id="$MODEL_ID" \
       --served-model-name="$SERVED_MODEL" \
       --gpu-memory-utilization=0.85 \
-      --max-model-len=262144 \
+      --max-model-len=131072 \
       --max-num-batched-tokens=16384 \
-      --max-num-seqs=4 \
+      --max-num-seqs=10 \
       --tool-call-parser=qwen3_coder \
       --reasoning-parser=qwen3 \
       --default-chat-template-kwargs='{"enable_thinking": true}' \
-      --no-language-model-only \
-      --limit-mm-per-prompt='{"image":4}' \
+      --language-model-only \
+      --speculative-method=qwen3_next_mtp \
+      --num-speculative-tokens=3 \
+      --performance-mode=throughput \
+      --optimization-level=2 \
       --smoke-test-after-start
   ) >> "$LOG_FILE" 2>&1
   local rc=$?

@@ -25,19 +25,24 @@ my %OPT = (
     public_model_name      => 'qwen3.6-27b-fp8',
     backend_model_name     => 'qwen3.6-27b-fp8',
     gpu_memory_utilization => '0.85',
-    max_model_len                => '262144',
+    max_model_len          => '131072',
     max_num_batched_tokens => '16384',
-    max_num_seqs           => '4',
+    max_num_seqs           => '10',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_coder',
     disable_thinking             => 0,
     default_chat_template_kwargs => '{"enable_thinking": true}',
     kv_cache_dtype         => '',
     device                 => '',
-    language_model_only          => 0,
-    limit_mm_per_prompt          => '{"image":4}',
+    language_model_only          => 1,
+    limit_mm_per_prompt          => '',
     backend_api_key        => '',
     backend_extra_args     => '',
+    speculative_config     => '',
+    speculative_method     => 'qwen3_next_mtp',
+    num_speculative_tokens => '3',
+    performance_mode       => 'throughput',
+    optimization_level     => '2',
     smoke_test_after_start => 1,
 
     # gateway config (written to gateway_config.json)
@@ -178,9 +183,16 @@ sub backend_action {
         push @cmd, "--reasoning-parser=$OPT{reasoning_parser}" if $OPT{reasoning_parser};
         push @cmd, "--kv-cache-dtype=$OPT{kv_cache_dtype}" if $OPT{kv_cache_dtype};
         push @cmd, "--device=$OPT{device}" if $OPT{device};
-        push @cmd, '--no-language-model-only' if !$OPT{language_model_only};
+        push @cmd, $OPT{language_model_only}
+            ? '--language-model-only'
+            : '--no-language-model-only';
         push @cmd, "--limit-mm-per-prompt=$OPT{limit_mm_per_prompt}" if $OPT{limit_mm_per_prompt};
         push @cmd, "--default-chat-template-kwargs=$OPT{default_chat_template_kwargs}" if $OPT{default_chat_template_kwargs};
+        push @cmd, "--speculative-config=$OPT{speculative_config}" if $OPT{speculative_config};
+        push @cmd, "--speculative-method=$OPT{speculative_method}" if $OPT{speculative_method};
+        push @cmd, "--num-speculative-tokens=$OPT{num_speculative_tokens}" if $OPT{num_speculative_tokens};
+        push @cmd, "--performance-mode=$OPT{performance_mode}" if $OPT{performance_mode};
+        push @cmd, "--optimization-level=$OPT{optimization_level}" if $OPT{optimization_level} ne '';
         push @cmd, '--disable-thinking' if $OPT{disable_thinking};
         push @cmd, "--api-key=$OPT{backend_api_key}" if $OPT{backend_api_key};
         push @cmd, '--smoke-test-after-start' if $OPT{smoke_test_after_start};
@@ -310,9 +322,21 @@ sub install_watchdog {
     my $watchdog_extra_args    = '';
     $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
         if $OPT{default_chat_template_kwargs};
-    $watchdog_extra_args .= "      --no-language-model-only \\\n" if !$OPT{language_model_only};
+    $watchdog_extra_args .= $OPT{language_model_only}
+        ? "      --language-model-only \\\n"
+        : "      --no-language-model-only \\\n";
     $watchdog_extra_args .= "      --limit-mm-per-prompt=" . shell_quote($OPT{limit_mm_per_prompt}) . " \\\n"
         if $OPT{limit_mm_per_prompt};
+    $watchdog_extra_args .= "      --speculative-config=" . shell_quote($OPT{speculative_config}) . " \\\n"
+        if $OPT{speculative_config};
+    $watchdog_extra_args .= "      --speculative-method=" . shell_quote($OPT{speculative_method}) . " \\\n"
+        if $OPT{speculative_method};
+    $watchdog_extra_args .= "      --num-speculative-tokens=" . shell_quote($OPT{num_speculative_tokens}) . " \\\n"
+        if $OPT{num_speculative_tokens};
+    $watchdog_extra_args .= "      --performance-mode=" . shell_quote($OPT{performance_mode}) . " \\\n"
+        if $OPT{performance_mode};
+    $watchdog_extra_args .= "      --optimization-level=" . shell_quote($OPT{optimization_level}) . " \\\n"
+        if $OPT{optimization_level} ne '';
     $watchdog_extra_args .= "      --disable-thinking \\\n" if $OPT{disable_thinking};
 
     open my $fh, '>', $watchdog or die "Cannot write $watchdog: $!\n";
@@ -423,7 +447,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=262144 language_only=$watchdog_language_only thinking=$watchdog_thinking"
+  log "RESTART_BEGIN backend=\$BACKEND_HOST:\$BACKEND_PORT model=\$SERVED_MODEL max_model_len=$OPT{max_model_len} max_num_seqs=$OPT{max_num_seqs} language_only=$watchdog_language_only thinking=$watchdog_thinking"
   (
     cd "\$SETUP_DIR" &&
     timeout "\$RESTART_TIMEOUT_SEC" perl "\$MANAGER" backend-restart \\
@@ -431,10 +455,10 @@ restart_backend() {
       --backend-port="\$BACKEND_PORT" \\
       --model-id="\$MODEL_ID" \\
       --served-model-name="\$SERVED_MODEL" \\
-      --gpu-memory-utilization=0.85 \\
-      --max-model-len=262144 \\
-      --max-num-batched-tokens=16384 \\
-      --max-num-seqs=4 \\
+      --gpu-memory-utilization=$OPT{gpu_memory_utilization} \\
+      --max-model-len=$OPT{max_model_len} \\
+      --max-num-batched-tokens=$OPT{max_num_batched_tokens} \\
+      --max-num-seqs=$OPT{max_num_seqs} \\
       --tool-call-parser=qwen3_coder \\
       --reasoning-parser=qwen3 \\
 $watchdog_extra_args      --smoke-test-after-start

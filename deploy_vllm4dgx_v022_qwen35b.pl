@@ -8,6 +8,7 @@ use File::Basename qw(dirname basename);
 use POSIX qw(strftime);
 use HTTP::Tiny;
 use Cwd qw(abs_path getcwd);
+use Fcntl qw(:flock);
 
 # =============================================================================
 # deploy_vllm4dgx_v022_qwen35b.pl
@@ -47,10 +48,10 @@ my %OPT = (
     port                         => 8000,
     dtype                        => 'auto',
     tensor_parallel_size         => 1,
-    gpu_memory_utilization       => '0.70',
-    max_model_len                => '262144',
-    max_num_batched_tokens       => '8192',
-    max_num_seqs                 => '16',
+    gpu_memory_utilization       => '0.85',
+    max_model_len                => '131072',
+    max_num_batched_tokens       => '16384',
+    max_num_seqs                 => '10',
 
     kv_cache_dtype               => '',
     device                       => '',
@@ -60,8 +61,8 @@ my %OPT = (
     disable_thinking             => 0,
 
     # New multimodal controls.
-    language_model_only          => 0,
-    limit_mm_per_prompt          => '{"image":4}',
+    language_model_only          => 1,
+    limit_mm_per_prompt          => '',
     media_io_kwargs              => '',
     allowed_local_media_path     => '',
     allowed_media_domains        => '',
@@ -75,6 +76,11 @@ my %OPT = (
     trust_remote_code            => 1,
     force_eager                  => 0,
     num_scheduler_steps          => '',
+    speculative_config           => '',
+    speculative_method           => 'qwen3_next_mtp',
+    num_speculative_tokens       => '3',
+    performance_mode             => 'throughput',
+    optimization_level           => '2',
 
     api_key                      => $ENV{VLLM_API_KEY} || '',
 
@@ -138,6 +144,7 @@ exit 0;
 
 sub main {
     my $action = $OPT{action};
+    acquire_service_lock() if $action =~ /^(?:start|stop|restart)$/;
 
     if ($action eq 'start') {
         my $cfg = ensure_runtime_ready(1);
@@ -169,6 +176,15 @@ sub main {
     else {
         die "Unknown action: $action\nUse: start | stop | restart | status | smoke | help\n";
     }
+}
+
+sub acquire_service_lock {
+    my $lock_file = File::Spec->catfile($HOST_RUN, 'service.lock');
+    open our $SERVICE_LOCK_FH, '>>', $lock_file
+        or die "Cannot open service lock $lock_file: $!\n";
+    print "Waiting for service lock: $lock_file\n";
+    flock($SERVICE_LOCK_FH, LOCK_EX)
+        or die "Cannot lock $lock_file: $!\n";
 }
 
 sub parse_args {
@@ -224,12 +240,26 @@ sub apply_derived_options {
         $opt->{default_chat_template_kwargs} = '{"enable_thinking": false}'
             unless defined($opt->{default_chat_template_kwargs}) && $opt->{default_chat_template_kwargs} ne '';
     }
+    if ($opt->{speculative_method}) {
+        my $tokens = $opt->{num_speculative_tokens} || 2;
+        $opt->{speculative_config} = encode_json({
+            method                 => $opt->{speculative_method},
+            num_speculative_tokens => int($tokens),
+        });
+    }
+    if ($opt->{language_model_only}) {
+        $opt->{limit_mm_per_prompt} = '';
+        $opt->{media_io_kwargs} = '';
+        $opt->{allowed_local_media_path} = '';
+        $opt->{allowed_media_domains} = '';
+        $opt->{mm_processor_kwargs} = '';
+    }
 }
 
 sub validate_options {
     my ($opt) = @_;
 
-    for my $k (qw(port startup_timeout max_model_len max_num_batched_tokens max_num_seqs tensor_parallel_size smoke_test_timeout num_scheduler_steps)) {
+    for my $k (qw(port startup_timeout max_model_len max_num_batched_tokens max_num_seqs tensor_parallel_size smoke_test_timeout num_scheduler_steps num_speculative_tokens)) {
         die "Invalid --$k value: $opt->{$k}\n" if defined($opt->{$k}) && $opt->{$k} ne '' && $opt->{$k} !~ /^\d+$/;
     }
 
@@ -244,6 +274,21 @@ sub validate_options {
     if ($opt->{device} ne '') {
         die "Invalid --device. Usually use cuda or leave empty.\n"
             unless $opt->{device} =~ /^(cuda|auto|cpu|neuron|tpu|xpu|hpu|openvino)$/;
+    }
+
+    if ($opt->{performance_mode} ne '') {
+        die "Invalid --performance-mode. Use balanced, interactivity, or throughput\n"
+            unless $opt->{performance_mode} =~ /^(balanced|interactivity|throughput)$/;
+    }
+
+    if ($opt->{optimization_level} ne '') {
+        die "Invalid --optimization-level. Use 0, 1, 2, or 3\n"
+            unless $opt->{optimization_level} =~ /^[0-3]$/;
+    }
+
+    if ($opt->{speculative_method} ne '') {
+        die "Invalid --speculative-method. Use qwen3_next_mtp or qwen3_5_mtp\n"
+            unless $opt->{speculative_method} =~ /^(qwen3_next_mtp|qwen3_5_mtp)$/;
     }
 }
 
@@ -417,6 +462,9 @@ sub derive_server_plan {
         trust_remote_code            => $OPT{trust_remote_code} ? JSON::PP::true : JSON::PP::false,
         force_eager                  => $OPT{force_eager} ? JSON::PP::true : JSON::PP::false,
         num_scheduler_steps          => $OPT{num_scheduler_steps} || '',
+        speculative_config           => $OPT{speculative_config} || '',
+        performance_mode             => $OPT{performance_mode} || '',
+        optimization_level           => $OPT{optimization_level} || '',
         enable_auto_tool_choice      => $OPT{enable_auto_tool_choice} ? JSON::PP::true : JSON::PP::false,
         enable_prefix_caching        => $OPT{enable_prefix_caching} ? JSON::PP::true : JSON::PP::false,
         enable_chunked_prefill       => $OPT{enable_chunked_prefill} ? JSON::PP::true : JSON::PP::false,
@@ -480,6 +528,9 @@ sub write_env_file {
         "VLLM_ALLOWED_LOCAL_MEDIA_PATH=$cfg->{allowed_local_media_path}",
         "VLLM_ALLOWED_MEDIA_DOMAINS=$cfg->{allowed_media_domains}",
         "VLLM_MM_PROCESSOR_KWARGS=$cfg->{mm_processor_kwargs}",
+        "VLLM_SPECULATIVE_CONFIG=$cfg->{speculative_config}",
+        "VLLM_PERFORMANCE_MODE=$cfg->{performance_mode}",
+        "VLLM_OPTIMIZATION_LEVEL=$cfg->{optimization_level}",
     );
     write_text($file, join("\n", @lines) . "\n");
 }
@@ -547,6 +598,9 @@ SCRIPT
     $script .= qq{CMD+=(--enable-chunked-prefill)\n} if $cfg->{enable_chunked_prefill};
     $script .= qq{CMD+=(--moe-backend triton)\n};
     $script .= qq{CMD+=(--num-scheduler-steps } . shell_quote($cfg->{num_scheduler_steps}) . qq{)\n} if $cfg->{num_scheduler_steps};
+    $script .= qq{CMD+=(--speculative-config } . shell_quote($cfg->{speculative_config}) . qq{)\n} if $cfg->{speculative_config};
+    $script .= qq{CMD+=(--performance-mode } . shell_quote($cfg->{performance_mode}) . qq{)\n} if $cfg->{performance_mode};
+    $script .= qq{CMD+=(--optimization-level } . shell_quote($cfg->{optimization_level}) . qq{)\n} if $cfg->{optimization_level};
 
     if ($cfg->{reasoning_parser}) {
         $script .= qq{CMD+=(--reasoning-parser } . shell_quote($cfg->{reasoning_parser}) . qq{)\n};
