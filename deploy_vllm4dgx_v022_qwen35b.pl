@@ -48,7 +48,7 @@ my %OPT = (
     dtype                        => 'auto',
     tensor_parallel_size         => 1,
     gpu_memory_utilization       => '0.70',
-    max_model_len                => '32768',
+    max_model_len                => '262144',
     max_num_batched_tokens       => '8192',
     max_num_seqs                 => '16',
 
@@ -56,12 +56,12 @@ my %OPT = (
     device                       => '',
     generation_config            => '',
     chat_template_content_format => '',
-    default_chat_template_kwargs => '',
+    default_chat_template_kwargs => '{"enable_thinking": true}',
     disable_thinking             => 0,
 
     # New multimodal controls.
-    language_model_only          => 1,
-    limit_mm_per_prompt          => '',
+    language_model_only          => 0,
+    limit_mm_per_prompt          => '{"image":4}',
     media_io_kwargs              => '',
     allowed_local_media_path     => '',
     allowed_media_domains        => '',

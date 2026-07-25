@@ -8,7 +8,7 @@ set -euo pipefail
 # Run on:
 #   cluster195 master node, as root.
 
-cd /home/dgx-spark-vllm-setup-v022
+cd /home/vLLM_installation_dgx_v22
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --backend-host=node13 \
   --backend-port=8000 \
@@ -20,4 +20,6 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-seqs=4 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --enable-thinking
+  --default-chat-template-kwargs='{"enable_thinking": true}' \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":4}'

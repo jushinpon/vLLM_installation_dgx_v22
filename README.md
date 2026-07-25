@@ -92,7 +92,7 @@ Recommended end-to-end flow for a fresh machine:
 3. Confirm the backend has NVIDIA driver/CUDA, enough `/local_opt` disk space, and `uv`.
 4. Run bootstrap with `--dry-run`.
 5. Run bootstrap with `--full-install`.
-6. Verify gateway, backend model name, 128K context, and watchdog log.
+6. Verify gateway, backend model name, 262K context, and watchdog log.
 7. Add or rotate student tokens with the gateway manager.
 8. Export the student token as `VLLM_API_KEY` before running benchmarks.
 
@@ -208,7 +208,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --enable-thinking \
+  --default-chat-template-kwargs='{"enable_thinking": true}' \
   --no-language-model-only \
   --limit-mm-per-prompt='{"image":4}' \
   --max-concurrent-per-student=6 \
@@ -246,7 +246,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-batched-tokens=16384 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --enable-thinking \
+  --default-chat-template-kwargs='{"enable_thinking": true}' \
   --no-language-model-only \
   --limit-mm-per-prompt='{"image":4}'
 ```
@@ -367,6 +367,7 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--max-num-batched-tokens` | `16384` | Max tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
+| `--default-chat-template-kwargs` | `{"enable_thinking": true}` | Enable Qwen thinking by default |
 | `--enable-thinking` | on | Keep Qwen reasoning/thinking output enabled |
 | `--disable-thinking` | off | Disable thinking/reasoning in output |
 | `--no-language-model-only` | on | Enable multimodal image input |

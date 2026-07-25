@@ -25,17 +25,17 @@ my %OPT = (
     public_model_name      => 'qwen3.6-35b-a3b-fp8',
     backend_model_name     => 'qwen3.6-35b-a3b-fp8',
     gpu_memory_utilization => '0.85',
-    max_model_len          => '262144',
+    max_model_len                => '262144',
     max_num_batched_tokens => '16384',
     max_num_seqs           => '4',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_coder',
-    disable_thinking       => 0,
+    disable_thinking             => 0,
     default_chat_template_kwargs => '{"enable_thinking": true}',
     kv_cache_dtype         => '',
     device                 => '',
-    language_model_only    => 1,
-    limit_mm_per_prompt    => '',
+    language_model_only          => 0,
+    limit_mm_per_prompt          => '{"image":4}',
     backend_api_key        => '',
     backend_extra_args     => '',
     smoke_test_after_start => 1,
@@ -333,7 +333,7 @@ BACKEND_PORT="$bp"
 MODEL_ID="$mid"
 SERVED_MODEL="$smn"
 
-FAIL_THRESHOLD=5
+FAIL_THRESHOLD=3
 RESTART_COOLDOWN_SEC=900
 PROBE_TIMEOUT_SEC=35
 RESTART_TIMEOUT_SEC=1200
@@ -393,7 +393,7 @@ try:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply exactly with: OK"}],
-        "max_tokens": 8,
+        "max_tokens": 64,
         "temperature": 0,
         "stream": False,
         "chat_template_kwargs": {"enable_thinking": False},

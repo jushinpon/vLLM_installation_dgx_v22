@@ -6,7 +6,7 @@
 |-----------|------|---------|
 | **vLLM backend** | `node13` | Port 8000, model `qwen3.6-35b-a3b-fp8` |
 | **nginx gateway** | `master` (cluster195) | Port 9000, model routing + student auth |
-| **Manager** | `master` | `/home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl` |
+| **Manager** | `master` | `/home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl` |
 
 ---
 
@@ -29,12 +29,12 @@ The gateway is deployed from the master to itself, so it also needs port 9000 op
 The master is not a compute node. Run once to disable unnecessary services:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl master-cleanup
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl master-cleanup
 ```
 
 This:
 
-- Fixes `/etc/hosts` so `<master-ip>` resolves as `master.localdomain master` (idempotent).
+- Fixes `/etc/hosts` so `192.168.0.101` resolves as `master.localdomain master` (idempotent).
 - Disables `slurmd` and resets its failed state.
 - Disables 8 PCP systemd units (`pmcd`, `pmlogger`, etc.).
 - Backs up modified files to `/root/codex_backups_cluster195/<timestamp>/`.
@@ -46,10 +46,10 @@ This:
 Restart (or start) the vLLM API server on `node13`:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart
 ```
 
-Default arguments are embedded in the script. Override as needed:
+Default production policy: `--max-model-len=262144`, `--default-chat-template-kwargs='{"enable_thinking": true}'`, and `--limit-mm-per-prompt='{"image":4}'`. Override as needed:
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
@@ -61,7 +61,9 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-seqs=4 \
   --reasoning-parser=qwen3 \
   --tool-call-parser=qwen3_coder \
-  --enable-thinking
+  --default-chat-template-kwargs='{"enable_thinking": true}' \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":4}'
 ```
 
 Other backend actions:
@@ -79,7 +81,7 @@ Other backend actions:
 ## 4. Deploy nginx gateway
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl gateway-setup
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl gateway-setup
 ```
 
 This installs nginx (if missing) and writes the gateway config to `/local_opt/lab-vllm-gateway/config/gateway_config.json`. Default gateway port is `9000`.
@@ -110,7 +112,7 @@ Student management:
 The watchdog probes real LLM generation on `node13` every 2 minutes and restarts the backend after 3 consecutive failures.
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl install-watchdog
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl install-watchdog
 ```
 
 Installed files:
@@ -126,7 +128,7 @@ Backups of any previous files go to `/root/codex_backups_vllm_watchdog/<timestam
 To remove:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
 ```
 
 ---
@@ -136,7 +138,7 @@ perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen
 Combines cleanup + watchdog install + backend restart + gateway setup:
 
 ```bash
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --with-cleanup \
   --with-watchdog
 ```
@@ -151,7 +153,7 @@ Run on master:
 
 ```bash
 # Check gateway status
-perl /home/dgx-spark-vllm-setup-v022/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl status
+perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl status
 
 # Manual watchdog run
 /usr/local/sbin/vllm_qwen35b_watchdog.sh

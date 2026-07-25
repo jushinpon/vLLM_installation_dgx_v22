@@ -25,9 +25,9 @@ for f in /etc/hosts /etc/hostname /etc/mail/sendmail.mc /etc/mail/sendmail.cf; d
 done
 
 if grep -qE '^[[:space:]]*192\.168\.0\.101[[:space:]]+master([[:space:]]|$)' /etc/hosts; then
-  sed -i 's/^[[:space:]]*192\.168\.0\.101[[:space:]]\+master[[:space:]]*$/<master-ip> master.localdomain master/' /etc/hosts
+  sed -i 's/^[[:space:]]*192\.168\.0\.101[[:space:]]\+master[[:space:]]*$/192.168.0.101 master.localdomain master/' /etc/hosts
 elif ! grep -qE '^[[:space:]]*192\.168\.0\.101[[:space:]]+.*master' /etc/hosts; then
-  echo '<master-ip> master.localdomain master' >> /etc/hosts
+  echo '192.168.0.101 master.localdomain master' >> /etc/hosts
 fi
 
 systemctl disable --now slurmd || true

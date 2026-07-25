@@ -7,14 +7,14 @@ STATE_DIR="/var/lib/vllm_qwen35b_watchdog"
 FAIL_FILE="$STATE_DIR/fail_count"
 LAST_RESTART_FILE="$STATE_DIR/last_restart_epoch"
 
-SETUP_DIR="/home/dgx-spark-vllm-setup-v022"
+SETUP_DIR="/home/vLLM_installation_dgx_v22"
 MANAGER="$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
 BACKEND_HOST="node13"
 BACKEND_PORT="8000"
 MODEL_ID="/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8"
 SERVED_MODEL="qwen3.6-35b-a3b-fp8"
 
-FAIL_THRESHOLD=5
+FAIL_THRESHOLD=3
 RESTART_COOLDOWN_SEC=900
 PROBE_TIMEOUT_SEC=35
 RESTART_TIMEOUT_SEC=1200
@@ -41,7 +41,7 @@ read_int_file() {
 }
 
 probe_backend_generation() {
-  ssh -o BatchMode=yes -o ConnectTimeout=8 "$BACKEND_HOST" \
+  ssh -n -o BatchMode=yes -o ConnectTimeout=8 "$BACKEND_HOST" \
     BACKEND_PORT="$BACKEND_PORT" SERVED_MODEL="$SERVED_MODEL" PROBE_TIMEOUT_SEC="$PROBE_TIMEOUT_SEC" \
     'python3 - <<'"'"'PY'"'"'
 import json
@@ -74,9 +74,10 @@ try:
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": "Reply exactly with: OK"}],
-        "max_tokens": 8,
+        "max_tokens": 64,
         "temperature": 0,
         "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     req = urllib.request.Request(
         base + "/v1/chat/completions",
@@ -86,7 +87,7 @@ try:
     )
     with urllib.request.urlopen(req, timeout=timeout) as r:
         body = json.loads(r.read().decode("utf-8", "replace"))
-    content = body["choices"][0]["message"].get("content", "").strip()
+    content = (body["choices"][0]["message"].get("content") or "").strip()
     if "OK" not in content.upper():
         fail("unexpected_content=" + content[:120])
 
@@ -103,7 +104,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 text_only=1"
+  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 language_only=0 thinking=enabled image_limit=4"
   (
     cd "$SETUP_DIR" &&
     timeout "$RESTART_TIMEOUT_SEC" perl "$MANAGER" backend-restart \
@@ -117,7 +118,10 @@ restart_backend() {
       --max-num-seqs=4 \
       --tool-call-parser=qwen3_coder \
       --reasoning-parser=qwen3 \
-      --enable-thinking
+      --default-chat-template-kwargs='{"enable_thinking": true}' \
+      --no-language-model-only \
+      --limit-mm-per-prompt='{"image":4}' \
+      --smoke-test-after-start
   ) >> "$LOG_FILE" 2>&1
   local rc=$?
   date +%s > "$LAST_RESTART_FILE"
