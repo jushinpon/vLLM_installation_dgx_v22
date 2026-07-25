@@ -1,7 +1,11 @@
 # DGX Spark vLLM v0.22.0 — cluster195 Deployment
 
 vLLM v0.22.0 inference serving system for **DGX Spark (GB10, aarch64)**.  
-Model: `Qwen/Qwen3.6-35B-A3B-FP8` (default, FP8 quantized MoE).  
+Model: `Qwen/Qwen3.6-27B-FP8` (default, FP8 quantized dense model).
+
+Compatibility note: operational script and watchdog filenames still contain
+`qwen35b` so existing cron entries and administrator commands keep working.
+Their deployment defaults now point to Qwen3.6-27B-FP8.
 **Nginx gateway** on master `:9000` — auth, rate limiting, proxying.  
 Backend vLLM on `node13:8000`.
 
@@ -73,7 +77,7 @@ Backend vLLM on `node13:8000`.
 
 After cloning this repo on the master node, use the bootstrap wrapper for a new
 cluster. It copies the repo to the backend node, installs vLLM, downloads the
-Qwen3.6 35B A3B FP8 model, deploys the backend and nginx gateway, and installs
+Qwen3.6 27B FP8 model, deploys the backend and nginx gateway, and installs
 the cron watchdog.
 
 Prerequisites before running the bootstrap:
@@ -114,8 +118,8 @@ bash bootstrap_new_cluster_v022_qwen35b.sh --apply-only \
 Default production settings used by the bootstrap:
 
 ```text
-model_id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8
-served_model_name=qwen3.6-35b-a3b-fp8
+model_id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8
+served_model_name=qwen3.6-27b-fp8
 gpu_memory_utilization=0.85
 max_model_len=262144
 max_num_batched_tokens=16384
@@ -147,7 +151,7 @@ tail -20 /var/log/vllm_qwen35b_watchdog.log
 Expected state:
 
 - Gateway is active on master port `9000`.
-- Backend `node13:8000` returns model `qwen3.6-35b-a3b-fp8`.
+- Backend `node13:8000` returns model `qwen3.6-27b-fp8`.
 - `/v1/models` reports `max_model_len: 262144`.
 - Watchdog log shows `PROBE_OK`.
 
@@ -238,8 +242,8 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --backend-host=node13 \
   --backend-port=8000 \
-  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
-  --served-model-name=qwen3.6-35b-a3b-fp8 \
+  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+  --served-model-name=qwen3.6-27b-fp8 \
   --gpu-memory-utilization=0.85 \
   --max-model-len=262144 \
   --max-num-seqs=4 \
@@ -359,8 +363,8 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8` | Model path or HF ID |
-| `--served-model-name` | `qwen3.6-35b-a3b-fp8` | Model name exposed by API |
+| `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8` | Model path or HF ID |
+| `--served-model-name` | `qwen3.6-27b-fp8` | Model name exposed by API |
 | `--gpu-memory-utilization` | `0.85` | Fraction of GPU memory for KV cache |
 | `--max-model-len` | `262144` | Maximum context length |
 | `--max-num-seqs` | `4` | Max concurrent sequences |
@@ -393,7 +397,7 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 
 ```
 Base URL: http://<master-ip>:9000/v1
-Model:    qwen3.6-35b-a3b-fp8
+Model:    qwen3.6-27b-fp8
 API key:  <student-token>
 ```
 
@@ -404,7 +408,7 @@ curl http://<gateway-ip>:9000/v1/chat/completions \
   -H "Authorization: Bearer <student-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "qwen3.6-35b-a3b-fp8",
+    "model": "qwen3.6-27b-fp8",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
@@ -420,7 +424,7 @@ client = OpenAI(
 )
 
 response = client.chat.completions.create(
-    model="qwen3.6-35b-a3b-fp8",
+    model="qwen3.6-27b-fp8",
     messages=[{"role": "user", "content": "Hello!"}]
 )
 print(response.choices[0].message.content)
@@ -498,7 +502,7 @@ bash opencode_quality_ab.sh
   ├── vllm.pid        ← PID file
   └── vllm.log        ← vLLM server log
 
-/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8/   ← Model weights
+/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8/   ← Model weights
 /local_opt/vllm-cache/                               ← Torch compile cache
 /local_opt/hf-vllm/                                  ← HuggingFace cache
 /local_opt/tmp-vllm/                                 ← Temp
@@ -567,9 +571,10 @@ perl deploy_lab_vllm_gateway_v022_qwen35b.pl start
 
 - DGX Spark (aarch64, GB10 GPU, NVIDIA DRIVER 580)
 - vLLM 0.22.0 compiled from source for aarch64
-- Model: Qwen3.6-35B-A3B-FP8 (FP8 quantized, Mixture-of-Experts, ~3B active params)
+- Model: Qwen3.6-27B-FP8 (FP8 quantized dense model)
 - Backend uses `--enable-chunked-prefill` + `--enable-prefix-caching`
-- MoE backend: `triton` (no SM100 cutlass kernel available on GB10)
+- The legacy `--moe-backend=triton` launcher option is retained for compatibility;
+  it is not used by this dense model.
 - nginx gateway uses `map` for token auth and `limit_req_zone` for rate limiting
 - **fail2ban** is installed on the master for SSH brute-force protection
 
@@ -598,3 +603,7 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
 ```
 
 See `patch_20260630/README.md` for full details, including watchdog behavior, log paths, state files, backup locations, and recovery notes.
+
+See `patch_20260630/QWEN36_27B_DEPLOYMENT_20260725.md` for the validated
+Qwen3.6-27B-FP8 deployment, performance results, 10-student load test, and
+rollback procedure.

@@ -31,7 +31,7 @@ PYEOF
         curl -sS --max-time 180 -X POST "http://${BACKEND_IP}:8000/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
-            -d '{"model":"qwen3.6-35b-a3b-fp8","messages":[{"role":"user","content":"Explain attention mechanisms in transformers."}],"max_tokens":512,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > "$tmpf" 2>/dev/null
+            -d '{"model":"qwen3.6-27b-fp8","messages":[{"role":"user","content":"Explain attention mechanisms in transformers."}],"max_tokens":512,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > "$tmpf" 2>/dev/null
         local end=$(date +%s.%N)
         local elapsed=$(echo "$end - $start" | bc -l 2>/dev/null || echo "0")
         local comp_tok=$(python3 "$py_script" "$tmpf" 2>/dev/null || echo "0")
@@ -81,7 +81,7 @@ do_stop() {
     perl "$MANAGE" backend-stop "$SETUP_DIR_OPT" 2>/dev/null || true
 }
 
-echo "=== vLLM Parameter Sweep - Qwen3.6-35B-A3B-FP8 ==="
+echo "=== vLLM Parameter Sweep - Qwen3.6-27B-FP8 ==="
 echo "Start: $(date)"
 
 do_stop; sleep 3
@@ -92,7 +92,7 @@ do_start 0.70 16 32768 8192 0 1; wait_backend
 curl -s --max-time 180 -X POST "http://${BACKEND_IP}:8000/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $API_KEY" \
-    -d '{"model":"qwen3.6-35b-a3b-fp8","messages":[{"role":"user","content":"Hello."}],"max_tokens":64,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > /dev/null 2>&1
+    -d '{"model":"qwen3.6-27b-fp8","messages":[{"role":"user","content":"Hello."}],"max_tokens":64,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > /dev/null 2>&1
 sleep 5
 bench_backend baseline 0.70 16 32768 8192 0 1
 

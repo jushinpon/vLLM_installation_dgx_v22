@@ -40,8 +40,8 @@ my %OPT = (
     hf_root                      => '/local_opt/hf-vllm',
     tmp_root                     => '/local_opt/tmp-vllm',
 
-    model_id                     => 'Qwen/Qwen3.6-35B-A3B-FP8',
-    served_model_name            => 'qwen3.6-35b-a3b-fp8',
+    model_id                     => 'Qwen/Qwen3.6-27B-FP8',
+    served_model_name            => 'qwen3.6-27b-fp8',
 
     host                         => '0.0.0.0',
     port                         => 8000,
@@ -278,8 +278,8 @@ Important OpenClaw/Hermes speed option:
 Examples:
   Text-only Qwen3.6 A3B FP8:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
-      --served-model-name=qwen3.6-35b-a3b-fp8 \
+      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+      --served-model-name=qwen3.6-27b-fp8 \
       --gpu-memory-utilization=0.70 \
       --max-model-len=32768 \
       --max-num-seqs=16 \
@@ -290,8 +290,8 @@ Examples:
 
   Multimodal Qwen3.6 A3B FP8 with one image allowed:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
-      --served-model-name=qwen3.6-35b-a3b-fp8 \
+      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+      --served-model-name=qwen3.6-27b-fp8 \
       --gpu-memory-utilization=0.70 \
       --max-model-len=65536 \
       --max-num-seqs=8 \

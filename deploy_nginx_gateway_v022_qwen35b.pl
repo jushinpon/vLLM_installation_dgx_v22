@@ -59,7 +59,11 @@ sub setup {
 
     generate_nginx_config();
     nginx_sys('enable');
-    nginx_sys('start');
+    if (system('systemctl is-active --quiet nginx') == 0) {
+        nginx_sys('reload');
+    } else {
+        nginx_sys('start');
+    }
 
     print "Gateway setup OK. Port 9000 -> node13:8000\n";
 }
@@ -71,7 +75,7 @@ sub generate_nginx_config {
     my $backend_host = $cfg->{backend_host} || 'node13';
     my $backend_port = $cfg->{backend_port} || 8000;
     my $gw_port      = $cfg->{gateway_port} || 9000;
-    my $public_model = $cfg->{public_model_name} || 'qwen3.6-35b-a3b-fp8';
+    my $public_model = $cfg->{public_model_name} || 'qwen3.6-27b-fp8';
     my $rpm_limit    = $cfg->{rpm_limit} || 60;
     my $client_to    = $cfg->{client_timeout} || 60;
     my $down_to      = $cfg->{downstream_timeout} || 600;
@@ -206,7 +210,7 @@ sub read_config {
         backend_host => 'node13',
         backend_port => 8000,
         gateway_port => 9000,
-        public_model_name => 'qwen3.6-35b-a3b-fp8',
+        public_model_name => 'qwen3.6-27b-fp8',
         rpm_limit => 60,
         client_timeout => 60,
         downstream_timeout => 600,
@@ -266,7 +270,7 @@ sub add_student {
 
     print "Added student: $sid\n";
     print "  Token: $opts{token}\n";
-    print "  Model: " . (read_config()->{public_model_name} || 'qwen3.6-35b-a3b-fp8') . "\n";
+    print "  Model: " . (read_config()->{public_model_name} || 'qwen3.6-27b-fp8') . "\n";
 }
 
 sub remove_student {

@@ -11,12 +11,12 @@ SETUP_DIR="/home/vLLM_installation_dgx_v22"
 MANAGER="$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
 BACKEND_HOST="node13"
 BACKEND_PORT="8000"
-MODEL_ID="/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8"
-SERVED_MODEL="qwen3.6-35b-a3b-fp8"
+MODEL_ID="/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8"
+SERVED_MODEL="qwen3.6-27b-fp8"
 
 FAIL_THRESHOLD=3
 RESTART_COOLDOWN_SEC=900
-PROBE_TIMEOUT_SEC=35
+PROBE_TIMEOUT_SEC=240
 RESTART_TIMEOUT_SEC=1200
 
 mkdir -p "$STATE_DIR"
@@ -51,8 +51,8 @@ import time
 import urllib.request
 
 port = os.environ.get("BACKEND_PORT", "8000")
-model = os.environ.get("SERVED_MODEL", "qwen3.6-35b-a3b-fp8")
-timeout = int(os.environ.get("PROBE_TIMEOUT_SEC", "35"))
+model = os.environ.get("SERVED_MODEL", "qwen3.6-27b-fp8")
+timeout = int(os.environ.get("PROBE_TIMEOUT_SEC", "240"))
 base = f"http://127.0.0.1:{port}"
 
 def fail(msg):
@@ -104,7 +104,7 @@ restart_backend() {
     return 1
   fi
 
-  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 language_only=0 thinking=enabled image_limit=4"
+  log "RESTART_BEGIN backend=$BACKEND_HOST:$BACKEND_PORT model=$SERVED_MODEL max_model_len=262144 language_only=0 thinking=enabled"
   (
     cd "$SETUP_DIR" &&
     timeout "$RESTART_TIMEOUT_SEC" perl "$MANAGER" backend-restart \

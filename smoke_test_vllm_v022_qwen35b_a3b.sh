@@ -5,7 +5,7 @@
 #   install_vllm-v022.sh
 #
 # Target model:
-#   Qwen/Qwen3.6-35B-A3B-FP8
+#   Qwen/Qwen3.6-27B-FP8
 #
 # Purpose:
 #   - Verify the current vLLM environment created by install_vllm-v022.sh.
@@ -36,8 +36,8 @@ set -o pipefail
 ################################################################################
 
 INSTALL_DIR="/local_opt/vllm-install"
-MODEL_ID="Qwen/Qwen3.6-35B-A3B-FP8"
-SERVED_MODEL_NAME="qwen3.6-35b-a3b-fp8"
+MODEL_ID="Qwen/Qwen3.6-27B-FP8"
+SERVED_MODEL_NAME="qwen3.6-27b-fp8"
 HOST="127.0.0.1"
 PORT="8000"
 DTYPE="auto"
@@ -82,7 +82,7 @@ Usage:
 
 Defaults match the current install_vllm-v022.sh setup:
   Install dir        : /local_opt/vllm-install
-  Model ID           : Qwen/Qwen3.6-35B-A3B-FP8
+  Model ID           : Qwen/Qwen3.6-27B-FP8
   Served model name  : qwen3.5-35b-a3b
   Host               : 127.0.0.1
   Port               : 8000
@@ -100,7 +100,7 @@ Common options:
 
   --model MODEL_ID_OR_PATH
       Hugging Face model ID or local model path.
-      Default: Qwen/Qwen3.6-35B-A3B-FP8
+      Default: Qwen/Qwen3.6-27B-FP8
 
   --served-model-name NAME
       Model name exposed by vLLM API.
@@ -314,7 +314,7 @@ activate_install() {
 
 print_config() {
   echo "========================================"
-  echo "vLLM v022 / Qwen3.6-35B-A3B-FP8 Smoke Test"
+  echo "vLLM v022 / Qwen3.6-27B-FP8 Smoke Test"
   echo "========================================"
   echo "[INFO] Install dir        : $INSTALL_DIR"
   echo "[INFO] Model ID           : $MODEL_ID"

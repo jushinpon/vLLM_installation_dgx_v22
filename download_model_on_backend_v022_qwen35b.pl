@@ -67,11 +67,11 @@ my %PRESETS = (
         tool_call_parser          => 'qwen3_coder',
         reasoning_parser          => 'qwen3',
         gpu_memory_utilization    => '0.85',
-        max_model_len             => '32768',
-        max_num_seqs              => '8',
-        max_num_batched_tokens    => '32768',
-        disable_thinking          => 1,
-        note                      => 'Official FP8. Best first choice for stability if you want Qwen3.6 on vLLM.',
+        max_model_len             => '262144',
+        max_num_seqs              => '4',
+        max_num_batched_tokens    => '16384',
+        disable_thinking          => 0,
+        note                      => 'Official dense FP8 production model for GB10 with thinking and multimodal support.',
     },
     qwen36_nvfp4_text => {
         repo_id                   => 'sakamakismile/Qwen3.6-27B-Text-NVFP4-MTP',
@@ -149,7 +149,7 @@ my %PRESETS = (
         max_num_seqs              => '16',
         max_num_batched_tokens    => '8192',
         disable_thinking          => 1,
-        note                      => 'Recommended Qwen3.6 35B-A3B FP8 for GB10. 96GB shared memory, optimized for 70% utilization.',
+        note                      => 'Previous Qwen3.6 35B-A3B FP8 production model retained as a rollback option.',
     },
     nemotron_nano_30b_fp8 => {
         repo_id                   => 'nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-FP8',
@@ -860,7 +860,7 @@ sub infer_served_names_if_needed {
         my $repo = $OPT{repo_id};
 
         if ($repo =~ m{Qwen/Qwen3\.6-35B-A3B-FP8}i) {
-            $name = 'qwen3.6-35b-a3b-fp8';
+            $name = 'qwen3.6-27b-fp8';
         }
         elsif ($repo =~ m{Qwen/Qwen3\.6-27B-FP8}i) {
             $name = 'qwen3.6-27b-fp8';

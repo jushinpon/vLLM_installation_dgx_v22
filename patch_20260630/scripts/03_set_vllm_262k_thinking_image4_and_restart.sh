@@ -40,8 +40,8 @@ cd "$SETUP_DIR"
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --backend-host=node13 \
   --backend-port=8000 \
-  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
-  --served-model-name=qwen3.6-35b-a3b-fp8 \
+  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+  --served-model-name=qwen3.6-27b-fp8 \
   --gpu-memory-utilization=0.85 \
   --max-model-len=262144 \
   --max-num-batched-tokens=16384 \

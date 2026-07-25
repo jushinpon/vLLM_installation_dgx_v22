@@ -30,7 +30,7 @@ bench_backend() {
         curl -sS --max-time 180 -X POST "http://${BACKEND_IP}:8000/v1/chat/completions" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
-            -d '{"model":"qwen3.6-35b-a3b-fp8","messages":[{"role":"user","content":"Explain attention mechanisms in transformers."}],"max_tokens":512,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > "$tmpf" 2>/dev/null
+            -d '{"model":"qwen3.6-27b-fp8","messages":[{"role":"user","content":"Explain attention mechanisms in transformers."}],"max_tokens":512,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > "$tmpf" 2>/dev/null
         local end=$(date +%s.%N)
         local elapsed=$(echo "$end - $start" | bc -l 2>/dev/null || echo "0")
         local comp_tok=$(python3 "$py_script" "$tmpf" 2>/dev/null || echo "0")
@@ -114,7 +114,7 @@ for config in \
     curl -s --max-time 180 -X POST "http://${BACKEND_IP}:8000/v1/chat/completions" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $API_KEY" \
-        -d '{"model":"qwen3.6-35b-a3b-fp8","messages":[{"role":"user","content":"Hello."}],"max_tokens":64,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > /dev/null 2>&1
+        -d '{"model":"qwen3.6-27b-fp8","messages":[{"role":"user","content":"Hello."}],"max_tokens":64,"temperature":0.2,"extra_body":{"chat_template_kwargs":{"enable_thinking":false}}}' > /dev/null 2>&1
     sleep 5
 
     bench_backend "$label" "$gpu_mem" "$seqs" "$len" "$batched" "$eager" "$chunked"

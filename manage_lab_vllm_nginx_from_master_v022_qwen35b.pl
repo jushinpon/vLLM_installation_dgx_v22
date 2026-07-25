@@ -20,10 +20,10 @@ my %OPT = (
     backend_ssh_user       => 'root',
     backend_bind_host      => '0.0.0.0',
     gateway_port           => 9000,
-    model_id               => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
-    served_model_name      => 'qwen3.6-35b-a3b-fp8',
-    public_model_name      => 'qwen3.6-35b-a3b-fp8',
-    backend_model_name     => 'qwen3.6-35b-a3b-fp8',
+    model_id               => '/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8',
+    served_model_name      => 'qwen3.6-27b-fp8',
+    public_model_name      => 'qwen3.6-27b-fp8',
+    backend_model_name     => 'qwen3.6-27b-fp8',
     gpu_memory_utilization => '0.85',
     max_model_len                => '262144',
     max_num_batched_tokens => '16384',
@@ -196,7 +196,7 @@ sub backend_action {
 sub run_ssh {
     my ($remote_cmd) = @_;
     my $target = "$OPT{backend_ssh_user}\@$OPT{backend_host}";
-    my $cmd = "ssh -o BatchMode=yes -o ConnectTimeout=10 " . shell_quote($target) . " " . shell_quote($remote_cmd);
+    my $cmd = "ssh -n -o BatchMode=yes -o ConnectTimeout=10 " . shell_quote($target) . " " . shell_quote($remote_cmd);
     my $out = `$cmd 2>&1`;
     my $rc = $? >> 8;
     return ($rc == 0 ? 1 : 0, $out // '');
@@ -335,7 +335,7 @@ SERVED_MODEL="$smn"
 
 FAIL_THRESHOLD=3
 RESTART_COOLDOWN_SEC=900
-PROBE_TIMEOUT_SEC=35
+PROBE_TIMEOUT_SEC=240
 RESTART_TIMEOUT_SEC=1200
 
 mkdir -p "\$STATE_DIR"
@@ -347,7 +347,7 @@ if ! flock -n 9; then
 fi
 
 log() {
-  printf '[%s] %s\n' "\$(date '+%F %T %Z')" "\$*" >> "\$LOG_FILE"
+  printf '[%s] %s\\n' "\$(date '+%F %T %Z')" "\$*" >> "\$LOG_FILE"
 }
 
 read_int_file() {
@@ -360,7 +360,7 @@ read_int_file() {
 }
 
 probe_backend_generation() {
-  ssh -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \\
+  ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \\
     BACKEND_PORT="\$BACKEND_PORT" SERVED_MODEL="\$SERVED_MODEL" PROBE_TIMEOUT_SEC="\$PROBE_TIMEOUT_SEC" \\
     'python3 - <<'"'"'PY'"'"'
 import json
@@ -370,8 +370,8 @@ import time
 import urllib.request
 
 port = os.environ.get("BACKEND_PORT", "8000")
-model = os.environ.get("SERVED_MODEL", "qwen3.6-35b-a3b-fp8")
-timeout = int(os.environ.get("PROBE_TIMEOUT_SEC", "35"))
+model = os.environ.get("SERVED_MODEL", "qwen3.6-27b-fp8")
+timeout = int(os.environ.get("PROBE_TIMEOUT_SEC", "240"))
 base = f"http://127.0.0.1:{port}"
 
 def fail(msg):

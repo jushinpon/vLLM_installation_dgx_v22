@@ -24,7 +24,7 @@ use POSIX qw(strftime);
 # Current typical models:
 #   qwen3.5-35b-a3b
 #   qwen3.6-27b-fp8
-#   qwen3.6-35b-a3b-fp8
+#   qwen3.6-27b-fp8
 #
 # What it measures:
 #   - Non-streaming wall-clock completion time.

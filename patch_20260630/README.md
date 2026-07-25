@@ -4,7 +4,7 @@
 
 | Component | Host | Details |
 |-----------|------|---------|
-| **vLLM backend** | `node13` | Port 8000, model `qwen3.6-35b-a3b-fp8` |
+| **vLLM backend** | `node13` | Port 8000, model `qwen3.6-27b-fp8` |
 | **nginx gateway** | `master` (cluster195) | Port 9000, model routing + student auth |
 | **Manager** | `master` | `/home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl` |
 
@@ -53,8 +53,8 @@ Default production policy: `--max-model-len=262144`, `--default-chat-template-kw
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
-  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
-  --served-model-name=qwen3.6-35b-a3b-fp8 \
+  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+  --served-model-name=qwen3.6-27b-fp8 \
   --gpu-memory-utilization=0.85 \
   --max-model-len=262144 \
   --max-num-batched-tokens=16384 \
