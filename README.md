@@ -139,9 +139,9 @@ thinking disabled per request:
 
 | Load | Aggregate output rate | Median latency |
 |------|----------------------:|---------------:|
-| 1 request | 21.58 tok/s | 11.86 s |
-| 4 concurrent requests | 60.90 tok/s | 14.63 s |
-| 10 concurrent requests | 153.80 tok/s | 15.99 s |
+| 1 request | 21.96 tok/s | 11.65 s |
+| 4 concurrent requests | 76.52 tok/s | 13.12 s |
+| 10 concurrent requests | 155.42 tok/s | 16.02 s |
 
 Three additional 10-user runs with 512 output tokens measured 171.18, 173.59,
 and 169.91 aggregate tok/s with zero request errors. The production profile is

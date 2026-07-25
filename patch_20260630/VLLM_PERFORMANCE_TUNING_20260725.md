@@ -49,6 +49,11 @@ Rates are output tokens per second. The final profile improves 10-user
 aggregate throughput by about 5.8 times over the original 262K multimodal
 profile.
 
+Post-deployment validation with Hermes Desktop and the Telegram gateway both
+running measured 21.96 tok/s for one request, 76.52 aggregate tok/s for four
+requests, and 155.42 aggregate tok/s for ten requests. The 10-user median
+latency was 16.02 seconds.
+
 ## Stability result
 
 Three consecutive 10-user tests generated 512 output tokens per request:

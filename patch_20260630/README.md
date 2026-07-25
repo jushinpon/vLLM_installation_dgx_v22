@@ -78,9 +78,9 @@ Fixed 256-token output benchmark:
 
 | Concurrent requests | Aggregate output rate | Median latency |
 |--------------------:|----------------------:|---------------:|
-| 1 | 21.58 tok/s | 11.86 s |
-| 4 | 60.90 tok/s | 14.63 s |
-| 10 | 153.80 tok/s | 15.99 s |
+| 1 | 21.96 tok/s | 11.65 s |
+| 4 | 76.52 tok/s | 13.12 s |
+| 10 | 155.42 tok/s | 16.02 s |
 
 Three 10-user stability runs with 512 output tokens reached 171.18, 173.59,
 and 169.91 aggregate tok/s. All 50 final-candidate requests completed with
