@@ -125,7 +125,8 @@ max_model_len=131072
 max_num_batched_tokens=16384
 max_num_seqs=10
 thinking=enabled
-language_model_only=true
+language_model_only=false
+limit_mm_per_prompt={"image":4}
 speculative_method=qwen3_next_mtp
 num_speculative_tokens=3
 performance_mode=throughput
@@ -134,19 +135,20 @@ gateway_port=9000
 watchdog=enabled
 ```
 
-These defaults were measured on node13 with fixed 256-token outputs and
-thinking disabled per request:
+These defaults were measured on node13 with fixed 256-token outputs:
 
-| Load | Aggregate output rate | Median latency |
-|------|----------------------:|---------------:|
-| 1 request | 21.96 tok/s | 11.65 s |
-| 4 concurrent requests | 76.52 tok/s | 13.12 s |
-| 10 concurrent requests | 155.42 tok/s | 16.02 s |
+| Load | Text, thinking off | Text, thinking on | 1 image, thinking on |
+|------|-------------------:|------------------:|---------------------:|
+| 1 request | 21.96 tok/s | 17.02 tok/s | 15.71 tok/s |
+| 4 concurrent requests | 69.55 tok/s | 64.59 tok/s | 62.80 tok/s |
+| 10 concurrent requests | 161.61 tok/s | 134.07 tok/s | 128.51 tok/s |
 
 Three additional 10-user runs with 512 output tokens measured 171.18, 173.59,
-and 169.91 aggregate tok/s with zero request errors. The production profile is
-text-only; enabling image input or restoring 262K context reduces concurrency
-and throughput.
+and 169.91 aggregate tok/s with zero request errors. Multimodal support is
+enabled for at most four images per prompt. Merely enabling the image pipeline
+did not reduce single-user text throughput; processing an actual image adds
+encoder latency. Thinking improves reasoning quality but generates hidden
+reasoning tokens and reduces output throughput.
 
 Use `--dry-run` first when adapting to a new cluster name or backend hostname:
 
@@ -230,7 +232,8 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
-  --language-model-only \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
   --num-speculative-tokens=3 \
   --performance-mode=throughput \
@@ -271,7 +274,8 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
-  --language-model-only \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
   --num-speculative-tokens=3 \
   --performance-mode=throughput \
@@ -397,7 +401,8 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--default-chat-template-kwargs` | `{"enable_thinking": true}` | Enable Qwen thinking by default |
 | `--enable-thinking` | on | Keep Qwen reasoning/thinking output enabled |
 | `--disable-thinking` | off | Disable thinking/reasoning in output |
-| `--language-model-only` | on | Text-only mode for higher throughput |
+| `--language-model-only` | off | Optional text-only mode |
+| `--limit-mm-per-prompt` | `{"image":4}` | Allow at most four images per prompt |
 | `--speculative-method` | `qwen3_next_mtp` | Qwen MTP speculative decoding |
 | `--num-speculative-tokens` | `3` | Draft tokens per decode step |
 | `--performance-mode` | `throughput` | Optimize aggregate throughput |

@@ -21,7 +21,8 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
-  --language-model-only \
+  --no-language-model-only \
+  --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
   --num-speculative-tokens=3 \
   --performance-mode=throughput \

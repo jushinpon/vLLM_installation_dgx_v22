@@ -186,7 +186,8 @@ apply_args=(
   --tool-call-parser=qwen3_coder
   --reasoning-parser=qwen3
   --enable-thinking
-  --language-model-only
+  --no-language-model-only
+  --limit-mm-per-prompt='{"image":4}'
   --speculative-method=qwen3_next_mtp
   --num-speculative-tokens=3
   --performance-mode=throughput

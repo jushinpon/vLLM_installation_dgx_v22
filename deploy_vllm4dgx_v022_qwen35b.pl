@@ -24,8 +24,8 @@ use Fcntl qw(:flock);
 #     --limit-mm-per-prompt='{"image":4}'
 #
 # Important:
-#   - For text-only Hermes/OpenClaw, keep default --language-model-only.
-#   - For image input, use --no-language-model-only and --limit-mm-per-prompt.
+#   - The default enables multimodal input with at most four images per prompt.
+#   - Use --language-model-only when a text-only deployment is preferred.
 #   - For Qwen3.6 fast non-thinking mode, use --disable-thinking.
 # =============================================================================
 
@@ -61,8 +61,8 @@ my %OPT = (
     disable_thinking             => 0,
 
     # New multimodal controls.
-    language_model_only          => 1,
-    limit_mm_per_prompt          => '',
+    language_model_only          => 0,
+    limit_mm_per_prompt          => '{"image":4}',
     media_io_kwargs              => '',
     allowed_local_media_path     => '',
     allowed_media_domains        => '',
