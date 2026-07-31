@@ -638,3 +638,83 @@ See `patch_20260630/README.md` for full details, including watchdog behavior, lo
 See `patch_20260630/QWEN36_27B_DEPLOYMENT_20260725.md` for the validated
 Qwen3.6-27B-FP8 deployment, performance results, 10-student load test, and
 rollback procedure.
+
+---
+
+## AI Agent 操作指南
+
+本指南供 AI Agent（如 Hermes Agent）讀取後，可獨立完成 vLLM 部署、管理、疑難排解等任務。
+
+### 部署新叢集（一鍵安裝）
+
+```bash
+# 在 master node 上執行
+cd /path/to/vLLM_installation_dgx_v22
+
+# 先預覽（dry run）
+bash bootstrap_new_cluster_v022_qwen35b.sh --full-install --backend-host=node13 --dry-run
+
+# 實際安裝
+bash bootstrap_new_cluster_v022_qwen35b.sh --full-install --backend-host=node13
+```
+
+### 僅套用配置（已有 vLLM + 模型）
+
+```bash
+bash bootstrap_new_cluster_v022_qwen35b.sh --apply-only --backend-host=node13
+```
+
+### 檢查系統狀態
+
+```bash
+# 完整狀態
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl status
+
+# 後端煙霧測試
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-smoke
+
+# 健康檢查
+curl -s http://127.0.0.1:9000/healthz
+
+# 查看 watchdog 日誌
+tail -20 /var/log/vllm_qwen35b_watchdog.log
+```
+
+### 後端參數調整並重啟
+
+```bash
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
+  --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+  --gpu-memory-utilization=0.85 \
+  --max-model-len=131072 \
+  --max-num-seqs=10
+```
+
+### 管理學生帳號
+
+```bash
+# 新增學生
+perl deploy_nginx_gateway_v022_qwen35b.pl add-student --student-id=student1
+
+# 列出所有學生
+perl deploy_nginx_gateway_v022_qwen35b.pl list-students
+
+# 移除學生
+perl deploy_nginx_gateway_v022_qwen35b.pl remove-student --student-id=student1
+
+# 設定限速
+perl deploy_nginx_gateway_v022_qwen35b.pl set-student-limits --student-id=student1 --rpm-limit=60
+```
+
+### 疑難排解流程
+
+```
+症狀 → 檢查 → 解決
+Gateway 401 → perl deploy_nginx_gateway_v022_qwen35b.pl list-students → 檢查 token 是否有效
+Gateway 502/504 → perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-smoke → 後端是否運行
+後端無法啟動 → cat /local_opt/vllm-service-qwen35b/vllm.log → 檢查 vLLM 錯誤
+nginx config error → nginx -t → 修復 config
+SELinux blocking → getsebool httpd_can_network_connect → setsebool -P httpd_can_network_connect on
+vLLM OOM → 降低 --gpu-memory-utilization 或 --max-model-len
+客戶無法連線 → 檢查 student token 在 students_tokens.json 中
+```
