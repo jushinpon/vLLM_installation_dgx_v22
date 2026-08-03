@@ -372,8 +372,10 @@ STATE_DIR="/var/lib/vllm_qwen35b_watchdog"
 FAIL_FILE="\$STATE_DIR/fail_count"
 LAST_RESTART_FILE="\$STATE_DIR/last_restart_epoch"
 MAINTENANCE_FILE="\$STATE_DIR/maintenance"
+FORENSICS_DIR="\$STATE_DIR/forensics"
 
 SETUP_DIR="$SETUP_DIR"
+BACKEND_FORENSICS_SCRIPT="\$SETUP_DIR/capture_vllm_forensics_v022.sh"
 MANAGER="\$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
 BACKEND_HOST="$bh"
 BACKEND_PORT="$bp"
@@ -386,7 +388,7 @@ PROBE_TIMEOUT_SEC=240
 RESTART_TIMEOUT_SEC=1200
 MAINTENANCE_MAX_AGE_SEC=1500
 
-mkdir -p "\$STATE_DIR"
+mkdir -p "\$STATE_DIR" "\$FORENSICS_DIR"
 touch "\$LOG_FILE"
 
 exec 9>"\$LOCK_FILE"
@@ -418,6 +420,35 @@ read_int_file() {
   else
     printf '0'
   fi
+}
+
+capture_forensics() {
+  local trigger="\$1"
+  local incident_id
+  incident_id="\$(date '+%Y%m%dT%H%M%S')_\$trigger"
+  local out_dir="\$FORENSICS_DIR/\$incident_id"
+
+  find "\$FORENSICS_DIR" -mindepth 1 -maxdepth 1 -type d -mtime +60 -exec rm -rf -- {} + 2>/dev/null || true
+  mkdir -p "\$out_dir"
+  {
+    printf 'incident_id=%s\\n' "\$incident_id"
+    printf 'trigger=%s\\n' "\$trigger"
+    date --iso-8601=seconds
+    tail -n 1200 /var/log/nginx/vllm-gateway-access.log 2>&1
+  } > "\$out_dir/gateway_access_tail.log"
+  tail -n 800 /var/log/nginx/vllm-gateway-error.log > "\$out_dir/gateway_error_tail.log" 2>&1 || true
+  journalctl -k --since '-30 minutes' --no-pager > "\$out_dir/master_kernel_last_30m.log" 2>&1 || true
+
+  if [ -x "\$BACKEND_FORENSICS_SCRIPT" ]; then
+    timeout 75 ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \
+      "\$BACKEND_FORENSICS_SCRIPT --incident-id=\$incident_id" \
+      > "\$out_dir/node13_capture_path.log" 2>&1 || true
+  else
+    printf 'backend forensic script missing: %s\\n' "\$BACKEND_FORENSICS_SCRIPT" \
+      > "\$out_dir/node13_capture_path.log"
+  fi
+
+  log "FORENSICS_CAPTURE incident_id=\$incident_id trigger=\$trigger master_dir=\$out_dir"
 }
 
 probe_backend_generation() {
@@ -525,6 +556,7 @@ fail_count="\${fail_count:-0}"
 fail_count=\$((fail_count + 1))
 echo "\$fail_count" > "\$FAIL_FILE"
 log "PROBE_FAIL count=\$fail_count/\$FAIL_THRESHOLD detail=\$probe_output"
+capture_forensics "probe_fail_\$fail_count"
 
 if [ "\$fail_count" -lt "\$FAIL_THRESHOLD" ]; then
   exit 0

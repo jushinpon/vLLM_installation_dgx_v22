@@ -130,10 +130,11 @@ my $ENV_FILE   = File::Spec->catfile($HOST_CFG,  'vllm.env');
 my $LAUNCHER   = File::Spec->catfile($SHARED_BIN, "launch_vllm_v022_qwen35b_$HOSTNAME.sh");
 my $PID_FILE   = File::Spec->catfile($HOST_RUN,  'vllm.pid');
 my $LOG_FILE   = File::Spec->catfile($HOST_LOG,  'vllm_server.log');
+my $LOG_ARCHIVE_DIR = File::Spec->catdir($HOST_LOG, 'archive');
 
 for my $dir (
     $OPT{stack_root}, $OPT{cache_root}, $OPT{hf_root}, $OPT{tmp_root},
-    $SHARED_BIN, $HOST_ROOT, $HOST_CFG, $HOST_LOG, $HOST_RUN, $HOST_META,
+    $SHARED_BIN, $HOST_ROOT, $HOST_CFG, $HOST_LOG, $LOG_ARCHIVE_DIR, $HOST_RUN, $HOST_META,
     $HF_HOME, $TMPDIR
 ) {
     make_path($dir) unless -d $dir;
@@ -494,6 +495,7 @@ sub write_runtime_files {
         paths => {
             launcher   => $LAUNCHER,
             log_file   => $LOG_FILE,
+            log_archive_dir => $LOG_ARCHIVE_DIR,
             pid_file   => $PID_FILE,
             env_file   => $ENV_FILE,
             config_js  => $CONFIG_JS,
@@ -641,7 +643,7 @@ sub start_server {
         return;
     }
 
-    unlink $LOG_FILE if -f $LOG_FILE;
+    archive_server_log();
 
     my $cmd = qq{nohup } . shell_quote($LAUNCHER) . qq{ >> } . shell_quote($LOG_FILE) . qq{ 2>&1 < /dev/null & echo \$!};
     my $pid = chomped(capture_cmd(['bash', '-lc', $cmd], 0));
@@ -691,6 +693,38 @@ sub start_server {
 
     print_log_tail(160);
     die "vLLM did not become ready within ${timeout}s\n";
+}
+
+sub archive_server_log {
+    return unless -f $LOG_FILE;
+
+    make_path($LOG_ARCHIVE_DIR) unless -d $LOG_ARCHIVE_DIR;
+    my $ts = strftime('%Y%m%d_%H%M%S', localtime);
+    my $archive = File::Spec->catfile($LOG_ARCHIVE_DIR, "vllm_server_${ts}.log");
+    my $n = 1;
+    while (-e $archive) {
+        $archive = File::Spec->catfile($LOG_ARCHIVE_DIR, "vllm_server_${ts}_$n.log");
+        $n++;
+    }
+
+    rename $LOG_FILE, $archive
+        or die "Cannot archive vLLM log $LOG_FILE to $archive: $!\n";
+    prune_archived_server_logs();
+    print "Archived previous vLLM log: $archive\n";
+}
+
+sub prune_archived_server_logs {
+    my $cutoff = time - 60 * 24 * 60 * 60;
+    opendir my $dh, $LOG_ARCHIVE_DIR
+        or die "Cannot read vLLM log archive $LOG_ARCHIVE_DIR: $!\n";
+    while (my $name = readdir $dh) {
+        next unless $name =~ /^vllm_server_.*\.log$/;
+        my $path = File::Spec->catfile($LOG_ARCHIVE_DIR, $name);
+        my @st = stat $path;
+        next unless @st && $st[9] < $cutoff;
+        unlink $path or warn "Cannot remove expired vLLM log $path: $!\n";
+    }
+    closedir $dh;
 }
 
 sub stop_existing_vllm {

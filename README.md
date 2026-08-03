@@ -662,6 +662,31 @@ See `patch_20260630/QWEN36_27B_DEPLOYMENT_20260725.md` for the validated
 Qwen3.6-27B-FP8 deployment, performance results, 10-student load test, and
 rollback procedure.
 
+## Crash Forensics
+
+The production deployment records enough metadata to investigate a vLLM
+failure without storing prompts or API keys.
+
+- Gateway requests: `/var/log/nginx/vllm-gateway-access.log`
+  - fields include timestamp, authenticated `student` ID, client IP, Hermes
+    mode, endpoint, status, request size, request time, and upstream time.
+  - request bodies and `Authorization` values are never logged.
+- Gateway upstream errors: `/var/log/nginx/vllm-gateway-error.log`
+- Watchdog history: `/var/log/vllm_qwen35b_watchdog.log`
+- Master incident bundles: `/var/lib/vllm_qwen35b_watchdog/forensics/`
+- Node13 incident bundles:
+  `/local_opt/vllm-service-qwen35b/hosts/node13/forensics/`
+- Previous vLLM server runs:
+  `/local_opt/vllm-service-qwen35b/hosts/node13/logs/archive/`
+
+Each failed watchdog generation probe creates a matching incident ID on the
+master and Node13. The bundle includes gateway tails, vLLM log tail, GPU
+allocation/process state, memory/process state, and the last 30 minutes of
+kernel and system journal. Use the same incident ID to correlate a student
+request with a GPU OOM, upstream timeout, or vLLM process exit.
+
+Forensic bundles and archived vLLM server logs are retained for 60 days.
+
 ---
 
 ## AI Agent 操作指南

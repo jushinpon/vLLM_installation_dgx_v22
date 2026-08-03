@@ -98,6 +98,15 @@ sub generate_nginx_config {
 
 limit_req_zone \$http_authorization zone=gw_rl:10m rate=${rpm_limit}r/m;
 
+# Deliberately excludes Authorization and request bodies.  This is sufficient
+# to correlate an authenticated student ID with an upstream failure.
+log_format vllm_forensics 'time=\$time_iso8601 student=\$gw_student_id client=\$remote_addr '
+                           'connection=\$connection/\$connection_requests mode=\$http_x_hermes_mode '
+                           'request="\$request" status=\$status bytes=\$body_bytes_sent '
+                           'request_length=\$request_length request_time=\$request_time '
+                           'upstream_addr=\$upstream_addr upstream_status=\$upstream_status '
+                           'upstream_response_time=\$upstream_response_time user_agent="\$http_user_agent"';
+
 map \$http_authorization \$gw_student_id {
     default     "";
 $map_entries
@@ -107,8 +116,8 @@ server {
     listen $gw_port;
     server_name _;
 
-    access_log $NGINX_LOG;
-    error_log  $NGINX_ERR_LOG;
+    access_log $NGINX_LOG vllm_forensics;
+    error_log  $NGINX_ERR_LOG warn;
 
     client_max_body_size 100m;
     proxy_connect_timeout ${client_to}s;
@@ -139,6 +148,7 @@ server {
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_set_header X-Student-ID \$gw_student_id;
+        proxy_set_header X-Gateway-Connection "\$connection-\$connection_requests-\$msec";
 
         proxy_set_header X-Accel-Buffering no;
         proxy_buffering off;
