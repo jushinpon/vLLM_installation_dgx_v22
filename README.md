@@ -96,7 +96,7 @@ Recommended end-to-end flow for a fresh machine:
 3. Confirm the backend has NVIDIA driver/CUDA, enough `/local_opt` disk space, and `uv`.
 4. Run bootstrap with `--dry-run`.
 5. Run bootstrap with `--full-install`.
-6. Verify gateway, backend model name, 262K context, and watchdog log.
+6. Verify gateway, backend model name, 65K shared-service context, and watchdog log.
 7. Add or rotate student tokens with the gateway manager.
 8. Export the student token as `VLLM_API_KEY` before running benchmarks.
 
@@ -121,8 +121,8 @@ Default production settings used by the bootstrap:
 model_id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8
 served_model_name=qwen3.6-27b-fp8
 gpu_memory_utilization=0.85
-max_model_len=131072
-max_num_batched_tokens=16384
+max_model_len=65536
+max_num_batched_tokens=32768
 max_num_seqs=10
 thinking=enabled
 language_model_only=false
@@ -171,11 +171,11 @@ Expected state:
 
 - Gateway is active on master port `9000`.
 - Backend `node13:8000` returns model `qwen3.6-27b-fp8`.
-- `/v1/models` reports `max_model_len: 131072`.
+- `/v1/models` reports `max_model_len: 65536`.
 - Watchdog log shows `PROBE_OK`.
 
 If Hermes Desktop or another OpenAI-compatible client mis-detects the model as
-32K context, set that client's model context length explicitly to `131072`.
+32K context, set that client's model context length explicitly to `65536`.
 
 ### 1. Install vLLM on backend (node13)
 
@@ -226,9 +226,9 @@ This installs nginx, opens port 9000 in firewalld, enables SELinux network conne
 cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=131072 \
+  --max-model-len=65536 \
   --max-num-seqs=10 \
-  --max-num-batched-tokens=16384 \
+  --max-num-batched-tokens=32768 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
@@ -255,7 +255,7 @@ cleanup and install the generation watchdog as part of the deployment:
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
-  --gpu-memory-utilization=0.85 --max-model-len=131072 \
+  --gpu-memory-utilization=0.85 --max-model-len=65536 \
   --with-cleanup --with-watchdog
 ```
 
@@ -268,9 +268,9 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
   --served-model-name=qwen3.6-27b-fp8 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=131072 \
+  --max-model-len=65536 \
   --max-num-seqs=10 \
-  --max-num-batched-tokens=16384 \
+  --max-num-batched-tokens=32768 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
   --default-chat-template-kwargs='{"enable_thinking": true}' \
@@ -382,6 +382,29 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl install-watchdog
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
 ```
 
+### Shared production profile and planned restarts
+
+The current cluster195 shared-service profile is `max-model-len=65536`,
+`max-num-batched-tokens=32768`, `max-num-seqs=10`, and
+`gpu-memory-utilization=0.85`. It preserves capacity for concurrent Hermes
+and Telegram users. Use 131072 only for an explicitly scheduled,
+lower-concurrency long-context task.
+
+The watchdog runs every two minutes and checks `/health`, `/v1/models`, and a
+real non-thinking chat completion. It restarts only after three consecutive
+failures and has a 15-minute restart cooldown. The manager writes a master-
+side maintenance marker before a deliberate backend start or restart. During
+the model-load window watchdog probes log `PROBE_SKIPPED maintenance_active`
+and reset the failure count, preventing a second restart from racing the
+planned one. A stale marker is cleared after 25 minutes.
+
+Always restart through the manager, not by invoking the backend deployer
+directly:
+
+```bash
+perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart
+```
+
 ---
 
 ## Backend vLLM Parameters
@@ -393,9 +416,9 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8` | Model path or HF ID |
 | `--served-model-name` | `qwen3.6-27b-fp8` | Model name exposed by API |
 | `--gpu-memory-utilization` | `0.85` | Fraction of GPU memory for KV cache |
-| `--max-model-len` | `131072` | Maximum context length |
+| `--max-model-len` | `65536` | Maximum context length for the shared service |
 | `--max-num-seqs` | `10` | Max concurrent sequences |
-| `--max-num-batched-tokens` | `16384` | Max tokens per batch |
+| `--max-num-batched-tokens` | `32768` | Max scheduler tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
 | `--default-chat-template-kwargs` | `{"enable_thinking": true}` | Enable Qwen thinking by default |
@@ -557,11 +580,11 @@ bash opencode_quality_ab.sh
 
 | Context | `max-model-len` | `max-num-seqs` | `gpu-memory-utilization` |
 |---------|----------------|---------------|--------------------------|
-| 128K current production (10-user) | 131072 | 10 | 0.85 |
+| 64K current production (10-user) | 65536 | 10 | 0.85 |
 | 262K multimodal fallback | 262144 | 4 | 0.85 |
-| 64K safer fallback | 65536 | 8 | 0.75 |
+| 64K lower-memory fallback | 65536 | 8 | 0.75 |
 | 32K conservative fallback | 32768 | 16 | 0.70 |
-| 128K lower-concurrency fallback | 131072 | 4 | 0.85 |
+| 128K scheduled single-user fallback | 131072 | 4 | 0.85 |
 | 320K | 327680 | 4 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 | 520K | 520000 | 2 | 0.85 (needs `--vllm-allow-long-max-model-len`) |
 
@@ -686,7 +709,8 @@ tail -20 /var/log/vllm_qwen35b_watchdog.log
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=131072 \
+  --max-model-len=65536 \
+  --max-num-batched-tokens=32768 \
   --max-num-seqs=10
 ```
 

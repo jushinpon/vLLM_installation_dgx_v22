@@ -13,6 +13,8 @@ my $NGINX_SCRIPT    = 'deploy_nginx_gateway_v022_qwen35b.pl';
 my $GATEWAY_CONFIG  = '/local_opt/lab-vllm-gateway/config/gateway_config.json';
 my $BKEND_SETUP = $FindBin::Bin;
 my $BKEND_SCRIPT    = 'deploy_vllm4dgx_v022_qwen35b.pl';
+my $WATCHDOG_STATE_DIR = '/var/lib/vllm_qwen35b_watchdog';
+my $WATCHDOG_MAINTENANCE_FILE = "$WATCHDOG_STATE_DIR/maintenance";
 
 my %OPT = (
     backend_host           => 'node13',
@@ -25,8 +27,8 @@ my %OPT = (
     public_model_name      => 'qwen3.6-27b-fp8',
     backend_model_name     => 'qwen3.6-27b-fp8',
     gpu_memory_utilization => '0.85',
-    max_model_len          => '131072',
-    max_num_batched_tokens => '16384',
+    max_model_len          => '65536',
+    max_num_batched_tokens => '32768',
     max_num_seqs           => '10',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_coder',
@@ -167,6 +169,11 @@ sub backend_action {
     my ($action, $allow_fail) = @_;
     $allow_fail ||= 0;
 
+    # A model load takes several minutes.  Tell the master-side watchdog that a
+    # deliberate start/restart is in progress so it cannot race a second restart.
+    my $maintenance = ($action eq 'start' || $action eq 'restart');
+    set_watchdog_maintenance($action) if $maintenance;
+
     my @cmd = ('perl', $BKEND_SCRIPT, $action);
 
     if ($action eq 'start' || $action eq 'restart') {
@@ -201,8 +208,23 @@ sub backend_action {
     my $env_prefix = $OPT{vllm_env} ? "$OPT{vllm_env} " : '';
     my $remote = $env_prefix . 'cd ' . shell_quote($BKEND_SETUP) . ' && ' . join(' ', map { shell_quote($_) } @cmd);
     my ($ok, $out) = run_ssh($remote);
+    clear_watchdog_maintenance() if $maintenance;
     print $out;
     die "Backend action '$action' failed on $OPT{backend_host}\n" if !$ok && !$allow_fail;
+}
+
+sub set_watchdog_maintenance {
+    my ($action) = @_;
+    make_path($WATCHDOG_STATE_DIR);
+    open my $fh, '>', $WATCHDOG_MAINTENANCE_FILE
+        or die "Cannot write $WATCHDOG_MAINTENANCE_FILE: $!\n";
+    print $fh "pid=$$ action=$action started_epoch=" . time . "\n";
+    close $fh;
+}
+
+sub clear_watchdog_maintenance {
+    unlink $WATCHDOG_MAINTENANCE_FILE
+        or warn "Cannot remove $WATCHDOG_MAINTENANCE_FILE: $!\n" if -e $WATCHDOG_MAINTENANCE_FILE;
 }
 
 sub run_ssh {
@@ -349,6 +371,7 @@ LOG_FILE="/var/log/vllm_qwen35b_watchdog.log"
 STATE_DIR="/var/lib/vllm_qwen35b_watchdog"
 FAIL_FILE="\$STATE_DIR/fail_count"
 LAST_RESTART_FILE="\$STATE_DIR/last_restart_epoch"
+MAINTENANCE_FILE="\$STATE_DIR/maintenance"
 
 SETUP_DIR="$SETUP_DIR"
 MANAGER="\$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl"
@@ -361,6 +384,7 @@ FAIL_THRESHOLD=3
 RESTART_COOLDOWN_SEC=900
 PROBE_TIMEOUT_SEC=240
 RESTART_TIMEOUT_SEC=1200
+MAINTENANCE_MAX_AGE_SEC=1500
 
 mkdir -p "\$STATE_DIR"
 touch "\$LOG_FILE"
@@ -373,6 +397,19 @@ fi
 log() {
   printf '[%s] %s\\n' "\$(date '+%F %T %Z')" "\$*" >> "\$LOG_FILE"
 }
+
+if [ -f "\$MAINTENANCE_FILE" ]; then
+  now="\$(date +%s)"
+  started="\$(stat -c %Y "\$MAINTENANCE_FILE" 2>/dev/null || printf '0')"
+  age=\$((now - started))
+  if [ "\$age" -ge 0 ] && [ "\$age" -le "\$MAINTENANCE_MAX_AGE_SEC" ]; then
+    echo 0 > "\$FAIL_FILE"
+    log "PROBE_SKIPPED maintenance_active age_sec=\$age"
+    exit 0
+  fi
+  rm -f "\$MAINTENANCE_FILE"
+  log "MAINTENANCE_STALE_CLEARED age_sec=\$age"
+fi
 
 read_int_file() {
   local f="\$1"
