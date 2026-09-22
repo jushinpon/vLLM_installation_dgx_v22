@@ -75,7 +75,7 @@ sub generate_nginx_config {
     my $backend_host = $cfg->{backend_host} || 'node13';
     my $backend_port = $cfg->{backend_port} || 8000;
     my $gw_port      = $cfg->{gateway_port} || 9000;
-    my $public_model = $cfg->{public_model_name} || 'qwen3.6-27b-fp8';
+    my $public_model = $cfg->{public_model_name} || 'mel_llm';
     my $rpm_limit    = $cfg->{rpm_limit} || 60;
     my $client_to    = $cfg->{client_timeout} || 60;
     my $down_to      = $cfg->{downstream_timeout} || 600;
@@ -220,7 +220,7 @@ sub read_config {
         backend_host => 'node13',
         backend_port => 8000,
         gateway_port => 9000,
-        public_model_name => 'qwen3.6-27b-fp8',
+        public_model_name => 'mel_llm',
         rpm_limit => 60,
         client_timeout => 60,
         downstream_timeout => 600,
@@ -280,7 +280,7 @@ sub add_student {
 
     print "Added student: $sid\n";
     print "  Token: $opts{token}\n";
-    print "  Model: " . (read_config()->{public_model_name} || 'qwen3.6-27b-fp8') . "\n";
+    print "  Model: " . (read_config()->{public_model_name} || 'mel_llm') . "\n";
 }
 
 sub remove_student {

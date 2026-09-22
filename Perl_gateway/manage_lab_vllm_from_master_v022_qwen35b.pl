@@ -111,7 +111,7 @@ my %OPT = (
 
     # Backend vLLM settings
     model_id                     => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
-    served_model_name            => 'qwen3.6-35b-a3b-fp8',
+    served_model_name            => 'mel_llm'',
     backend_bind_host            => '0.0.0.0',
     backend_port                 => 8000,
     gpu_memory_utilization       => '0.70',
@@ -138,8 +138,8 @@ my %OPT = (
     # Gateway settings
     gateway_host                 => '0.0.0.0',
     gateway_port                 => 9000,
-    public_model_name            => 'qwen3.6-35b-a3b-fp8',
-    backend_model_name           => 'qwen3.6-35b-a3b-fp8',
+    public_model_name            => 'mel_llm'',
+    backend_model_name           => 'mel_llm'',
     rpm_limit                    => 60,
     max_concurrent_per_student   => 4,
     client_timeout               => 60,

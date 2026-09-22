@@ -31,7 +31,7 @@ use JSON::PP qw(decode_json);
 
 my $base_url         = '';
 my $api_key          = '';
-my $model            = 'qwen3.6-27b-fp8';
+my $model            = 'mel_llm';
 my $timeout_sec      = 300;
 my $retries          = 3;
 my $retry_wait       = 5;
