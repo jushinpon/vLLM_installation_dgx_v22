@@ -49,15 +49,15 @@ my %OPT = (
     dtype                        => 'auto',
     tensor_parallel_size         => 1,
     gpu_memory_utilization       => '0.85',
-    max_model_len                => '131072',
-    max_num_batched_tokens       => '16384',
+    max_model_len                => '262144',
+    max_num_batched_tokens       => '32768',
     max_num_seqs                 => '10',
 
     kv_cache_dtype               => '',
     device                       => '',
     generation_config            => '',
     chat_template_content_format => '',
-    default_chat_template_kwargs => '{"enable_thinking": true}',
+    default_chat_template_kwargs => '{"enable_thinking": false}',
     disable_thinking             => 0,
 
     # New multimodal controls.

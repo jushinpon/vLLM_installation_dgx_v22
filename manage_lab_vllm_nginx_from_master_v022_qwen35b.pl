@@ -27,13 +27,13 @@ my %OPT = (
     public_model_name      => 'mel_llm',
     backend_model_name     => 'mel_llm',
     gpu_memory_utilization => '0.85',
-    max_model_len          => '65536',
+    max_model_len          => '262144',
     max_num_batched_tokens => '32768',
     max_num_seqs           => '10',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_coder',
     disable_thinking             => 0,
-    default_chat_template_kwargs => '{"enable_thinking": true}',
+    default_chat_template_kwargs => '{"enable_thinking": false}',
     kv_cache_dtype         => '',
     device                 => '',
     language_model_only          => 0,
@@ -340,7 +340,16 @@ sub install_watchdog {
     my $mid  = $OPT{model_id};
     my $smn  = $OPT{served_model_name};
     my $watchdog_language_only = $OPT{language_model_only} ? 1 : 0;
-    my $watchdog_thinking      = $OPT{disable_thinking} ? 'disabled' : ($OPT{default_chat_template_kwargs} ? 'enabled' : 'default');
+    my $watchdog_thinking      = 'default';
+    if ($OPT{disable_thinking}) {
+        $watchdog_thinking = 'disabled';
+    }
+    elsif (($OPT{default_chat_template_kwargs} || '') =~ /"enable_thinking"\s*:\s*false/i) {
+        $watchdog_thinking = 'disabled';
+    }
+    elsif (($OPT{default_chat_template_kwargs} || '') =~ /"enable_thinking"\s*:\s*true/i) {
+        $watchdog_thinking = 'enabled';
+    }
     my $watchdog_extra_args    = '';
     $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
         if $OPT{default_chat_template_kwargs};
@@ -741,7 +750,7 @@ Backend options (defaults):
   --reasoning-parser=qwen3
   --tool-call-parser=qwen3_coder
   --enable-thinking / --disable-thinking
-  --default-chat-template-kwargs='{"enable_thinking": true}'
+  --default-chat-template-kwargs='{"enable_thinking": false}'
   --no-language-model-only (enable multimodal)
   --vllm-allow-long-max-model-len (override model's max_position_embeddings)
   --skip-backend (skip backend restart in apply-all)

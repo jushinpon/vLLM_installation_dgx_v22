@@ -174,10 +174,10 @@ Default production settings used by the bootstrap:
 model_id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8
 served_model_name=mel_llm
 gpu_memory_utilization=0.85
-max_model_len=65536
+max_model_len=262144
 max_num_batched_tokens=32768
 max_num_seqs=10
-thinking=enabled
+thinking=disabled
 language_model_only=false
 limit_mm_per_prompt={"image":4}
 speculative_method=qwen3_next_mtp
@@ -279,12 +279,12 @@ This installs nginx, opens port 9000 in firewalld, enables SELinux network conne
 cd vLLM_installation_dgx_v22/
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=65536 \
+  --max-model-len=262144 \
   --max-num-seqs=10 \
   --max-num-batched-tokens=32768 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --default-chat-template-kwargs='{"enable_thinking": true}' \
+  --default-chat-template-kwargs='{"enable_thinking": false}' \
   --no-language-model-only \
   --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
@@ -308,7 +308,7 @@ cleanup and install the generation watchdog as part of the deployment:
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \
-  --gpu-memory-utilization=0.85 --max-model-len=65536 \
+  --gpu-memory-utilization=0.85 --max-model-len=262144 \
   --with-cleanup --with-watchdog
 ```
 
@@ -321,12 +321,12 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
   --served-model-name=mel_llm \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=65536 \
+  --max-model-len=262144 \
   --max-num-seqs=10 \
   --max-num-batched-tokens=32768 \
   --tool-call-parser=qwen3_coder \
   --reasoning-parser=qwen3 \
-  --default-chat-template-kwargs='{"enable_thinking": true}' \
+  --default-chat-template-kwargs='{"enable_thinking": false}' \
   --no-language-model-only \
   --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
@@ -437,11 +437,11 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl uninstall-watchdog
 
 ### Shared production profile and planned restarts
 
-The current cluster195 shared-service profile is `max-model-len=65536`,
+The current cluster195 shared-service profile is `max-model-len=262144`,
 `max-num-batched-tokens=32768`, `max-num-seqs=10`, and
 `gpu-memory-utilization=0.85`. It preserves capacity for concurrent Hermes
-and Telegram users. Use 131072 only for an explicitly scheduled,
-lower-concurrency long-context task.
+and Telegram users. If memory pressure appears under heavy concurrent long
+prompts, temporarily fall back to 65536 for higher concurrency.
 
 The watchdog runs every two minutes and checks `/health`, `/v1/models`, and a
 real non-thinking chat completion. It restarts only after three consecutive
@@ -469,14 +469,14 @@ All parameters are passed via `--name=value` to the orchestrator's `apply-all` o
 | `--model-id` | `/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8` | Model path or HF ID |
 | `--served-model-name` | `mel_llm` | Model name exposed by API |
 | `--gpu-memory-utilization` | `0.85` | Fraction of GPU memory for KV cache |
-| `--max-model-len` | `65536` | Maximum context length for the shared service |
+| `--max-model-len` | `262144` | Maximum context length for the shared service |
 | `--max-num-seqs` | `10` | Max concurrent sequences |
 | `--max-num-batched-tokens` | `32768` | Max scheduler tokens per batch |
 | `--reasoning-parser` | `qwen3` | Reasoning parser for chain-of-thought |
 | `--tool-call-parser` | `qwen3_coder` | Tool call format parser |
-| `--default-chat-template-kwargs` | `{"enable_thinking": true}` | Enable Qwen thinking by default |
-| `--enable-thinking` | on | Keep Qwen reasoning/thinking output enabled |
-| `--disable-thinking` | off | Disable thinking/reasoning in output |
+| `--default-chat-template-kwargs` | `{"enable_thinking": false}` | Disable Qwen thinking by default for fast shared-service responses |
+| `--enable-thinking` | off | Explicitly enable Qwen reasoning/thinking output |
+| `--disable-thinking` | on | Disable thinking/reasoning in output |
 | `--language-model-only` | off | Optional text-only mode |
 | `--limit-mm-per-prompt` | `{"image":4}` | Allow at most four images per prompt |
 | `--speculative-method` | `qwen3_next_mtp` | Qwen MTP speculative decoding |
@@ -633,8 +633,8 @@ bash opencode_quality_ab.sh
 
 | Context | `max-model-len` | `max-num-seqs` | `gpu-memory-utilization` |
 |---------|----------------|---------------|--------------------------|
-| 64K current production (10-user) | 65536 | 10 | 0.85 |
-| 262K multimodal fallback | 262144 | 4 | 0.85 |
+| 262K current production | 262144 | 10 | 0.85 |
+| 64K high-concurrency fallback | 65536 | 10 | 0.85 |
 | 64K lower-memory fallback | 65536 | 8 | 0.75 |
 | 32K conservative fallback | 32768 | 16 | 0.70 |
 | 128K scheduled single-user fallback | 131072 | 4 | 0.85 |
@@ -787,7 +787,7 @@ tail -20 /var/log/vllm_qwen35b_watchdog.log
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=65536 \
+  --max-model-len=262144 \
   --max-num-batched-tokens=32768 \
   --max-num-seqs=10
 ```

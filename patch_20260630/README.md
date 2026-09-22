@@ -49,10 +49,11 @@ Restart (or start) the vLLM API server on `node13`:
 perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart
 ```
 
-Default production policy is optimized for ten text-only Hermes users:
-`--max-model-len=131072`, Qwen MTP with three draft tokens, throughput mode,
+Default production policy is optimized for ten shared Hermes users:
+`--max-model-len=262144`, Qwen MTP with three draft tokens, throughput mode,
 optimization level 2, and `--max-num-seqs=10`. The server keeps thinking
-enabled by default; Hermes clients can disable it per request.
+disabled by default for fast responses; Hermes reasoning clients can enable it
+per request.
 
 ```bash
 perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
@@ -64,9 +65,9 @@ perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl backend-restart \
   --max-num-seqs=10 \
   --reasoning-parser=qwen3 \
   --tool-call-parser=qwen3_coder \
-  --default-chat-template-kwargs='{"enable_thinking": true}' \
+  --default-chat-template-kwargs='{"enable_thinking": false}' \
   --no-language-model-only \
-  --limit-mm-per-prompt='{"image":4}'
+  --limit-mm-per-prompt='{"image":4}' \
   --speculative-method=qwen3_next_mtp \
   --num-speculative-tokens=3 \
   --performance-mode=throughput \
@@ -153,7 +154,8 @@ Installed files:
 Backups of any previous files go to `/root/codex_backups_vllm_watchdog/<timestamp>/`.
 
 The generated restart command uses the same production values as the manager:
-131,072 context, text-only, `max-num-seqs=10`, MTP=3, throughput mode, and O2.
+262,144 context, multimodal enabled with four images per prompt,
+`max-num-seqs=10`, MTP=3, throughput mode, O2, and thinking disabled by default.
 The backend deployer also takes an exclusive service lock, so watchdog and
 manual restart commands cannot launch competing vLLM processes.
 
