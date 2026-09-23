@@ -51,6 +51,8 @@ my %OPT = (
     speculative_config     => '',
     speculative_method     => 'qwen3_next_mtp',
     num_speculative_tokens => '3',
+    speculative_model     => '',
+    draft_sample_method   => '',
     performance_mode       => 'throughput',
     optimization_level     => '2',
     smoke_test_after_start => 1,
@@ -221,6 +223,8 @@ sub backend_action {
         push @cmd, "--speculative-config=$OPT{speculative_config}" if $OPT{speculative_config};
         push @cmd, "--speculative-method=$OPT{speculative_method}" if $OPT{speculative_method};
         push @cmd, "--num-speculative-tokens=$OPT{num_speculative_tokens}" if $OPT{num_speculative_tokens};
+        push @cmd, "--speculative-model=$OPT{speculative_model}" if $OPT{speculative_model};
+        push @cmd, "--draft-sample-method=$OPT{draft_sample_method}" if $OPT{draft_sample_method};
         push @cmd, "--performance-mode=$OPT{performance_mode}" if $OPT{performance_mode};
         push @cmd, "--optimization-level=$OPT{optimization_level}" if $OPT{optimization_level} ne '';
         push @cmd, '--disable-thinking' if $OPT{disable_thinking};
@@ -411,6 +415,10 @@ sub install_watchdog {
         if $OPT{speculative_method};
     $watchdog_extra_args .= "      --num-speculative-tokens=" . shell_quote($OPT{num_speculative_tokens}) . " \\\n"
         if $OPT{num_speculative_tokens};
+    $watchdog_extra_args .= "      --speculative-model=" . shell_quote($OPT{speculative_model}) . " \n"
+        if $OPT{speculative_model};
+    $watchdog_extra_args .= "      --draft-sample-method=" . shell_quote($OPT{draft_sample_method}) . " \n"
+        if $OPT{draft_sample_method};
     $watchdog_extra_args .= "      --performance-mode=" . shell_quote($OPT{performance_mode}) . " \\\n"
         if $OPT{performance_mode};
     $watchdog_extra_args .= "      --optimization-level=" . shell_quote($OPT{optimization_level}) . " \\\n"

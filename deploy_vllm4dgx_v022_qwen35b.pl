@@ -80,6 +80,8 @@ my %OPT = (
     speculative_config           => '',
     speculative_method           => 'qwen3_next_mtp',
     num_speculative_tokens       => '3',
+    speculative_model           => '',
+    draft_sample_method         => '',
     performance_mode             => 'throughput',
     optimization_level           => '2',
 
@@ -244,10 +246,15 @@ sub apply_derived_options {
     }
     if ($opt->{speculative_method}) {
         my $tokens = $opt->{num_speculative_tokens} || 2;
-        $opt->{speculative_config} = encode_json({
+        my %spec_cfg = (
             method                 => $opt->{speculative_method},
             num_speculative_tokens => int($tokens),
-        });
+        );
+        if ($opt->{speculative_method} =~ /^(dflash|dspark)$/) {
+            $spec_cfg{model} = $opt->{speculative_model} if $opt->{speculative_model};
+            $spec_cfg{draft_sample_method} = $opt->{draft_sample_method} if $opt->{draft_sample_method};
+        }
+        $opt->{speculative_config} = encode_json(\%spec_cfg);
     }
     if ($opt->{language_model_only}) {
         $opt->{limit_mm_per_prompt} = '';
@@ -289,8 +296,8 @@ sub validate_options {
     }
 
     if ($opt->{speculative_method} ne '') {
-        die "Invalid --speculative-method. Use mtp, qwen3_next_mtp, or qwen3_5_mtp\n"
-            unless $opt->{speculative_method} =~ /^(mtp|qwen3_next_mtp|qwen3_5_mtp)$/;
+        die "Invalid --speculative-method. Use qwen3_next_mtp, qwen3_5_mtp, dflash, or dspark\n"
+            unless $opt->{speculative_method} =~ /^(qwen3_next_mtp|qwen3_5_mtp|dflash|dspark)$/;
     }
 }
 
@@ -363,9 +370,8 @@ sub ensure_runtime_ready {
     my $probe = decode_json(python_json(python_probe_code()));
     die "vLLM validation failed in current venv\n" unless $probe->{ok};
     die "CUDA is not available to PyTorch/vLLM in current venv\n" unless $probe->{cuda_available};
-    my $expected_triton = $OPT{expected_triton_version};
-    die "Expected Triton $expected_triton, got $probe->{triton_version}\n"
-        unless ($probe->{triton_version} || '') =~ /^\Q$expected_triton\E(?:[.+-]|$)/;
+    die "Expected Triton 3.7.1, got $probe->{triton_version}\n"
+        unless ($probe->{triton_version} || '') =~ /^3.7.1/;
 
     # verify_symbol(); # DISABLED for SM120 Blackwell - using moe-backend triton
     verify_api_entrypoint();
