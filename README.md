@@ -143,11 +143,16 @@ bash ./deploy_qwen38_27b_native_v0271.sh --watchdog
 
 The Qwen3.8 profile uses vLLM source tag `v0.27.1`, PyTorch `2.13.0+cu130`,
 Triton `3.7.1`, `gpu_memory_utilization=0.90`, `max_model_len=262144`,
-`max_num_batched_tokens=32768`, `max_num_seqs=10`, `qwen3_xml` tools,
+`kv_cache_dtype=fp8`, `max_num_batched_tokens=32768`, `max_num_seqs=10`,
+`qwen3_xml` tools,
 `qwen3` reasoning parsing, and MTP speculation (`mtp`, three draft tokens).
-On node13, the direct-backend test with thinking off measured 20.383 completion
-tokens/s at concurrency 1 (three 422-token runs) and 157.547 aggregate
-completion tokens/s at concurrency 10 (1,739 completion tokens in 11.038 s).
+On node13, the direct-backend test with thinking off measured 20.573 completion
+tokens/s at concurrency 1 (three 426-token runs). FP8 KV cache is a modest
+single-request improvement over the prior 20.408 tok/s baseline, but it raises
+the profiled 262K-context capacity from 4.50x to 8.64x. A 10-request test
+completed all requests successfully at 153.762 aggregate completion tok/s
+(4,150 completion tokens in 26.990 s; a different prompt from the historical
+benchmark, so it is not a direct before/after comparison).
 
 The checkpoint is configured as `Qwen3_5ForConditionalGeneration` and runs
 with the vLLM Qwen3 vision processor. It accepts OpenAI-compatible

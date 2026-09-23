@@ -390,6 +390,14 @@ sub install_watchdog {
     }
     $watchdog_extra_args .= "      --backend-expected-triton-version=" . shell_quote($OPT{backend_expected_triton_version}) . " \\\n"
         if $OPT{backend_expected_triton_version} ne '';
+    $watchdog_extra_args .= "      --tool-call-parser=" . shell_quote($OPT{tool_call_parser}) . " \\\n"
+        if $OPT{tool_call_parser};
+    $watchdog_extra_args .= "      --reasoning-parser=" . shell_quote($OPT{reasoning_parser}) . " \\\n"
+        if $OPT{reasoning_parser};
+    $watchdog_extra_args .= "      --kv-cache-dtype=" . shell_quote($OPT{kv_cache_dtype}) . " \\\n"
+        if $OPT{kv_cache_dtype};
+    $watchdog_extra_args .= "      --device=" . shell_quote($OPT{device}) . " \\\n"
+        if $OPT{device};
     $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
         if $OPT{default_chat_template_kwargs};
     $watchdog_extra_args .= $OPT{language_model_only}
@@ -575,8 +583,6 @@ restart_backend() {
       --max-model-len=$OPT{max_model_len} \\
       --max-num-batched-tokens=$OPT{max_num_batched_tokens} \\
       --max-num-seqs=$OPT{max_num_seqs} \\
-      --tool-call-parser=qwen3_coder \\
-      --reasoning-parser=qwen3 \\
 $watchdog_extra_args      --smoke-test-after-start
   ) >> "\$LOG_FILE" 2>&1
   local rc=\$?

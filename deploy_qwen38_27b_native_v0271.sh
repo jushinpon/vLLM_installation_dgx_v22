@@ -68,6 +68,7 @@ runtime_args=(
   "--model-id=$MODEL_DIR"
   "--served-model-name=mel_llm"
   "--gpu-memory-utilization=0.90"
+  "--kv-cache-dtype=fp8"
   "--max-model-len=262144"
   "--max-num-batched-tokens=32768"
   "--max-num-seqs=10"
