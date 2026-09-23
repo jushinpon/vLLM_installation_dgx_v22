@@ -38,6 +38,7 @@ VLLM_VERSION="v0.22.0"
 PYTORCH_VERSION="2.11.0"
 TORCHVISION_VERSION="0.26.0"
 TORCHAUDIO_VERSION="2.11.0"
+INSTALL_TORCHAUDIO="1"
 PYTORCH_INDEX_URL="https://download.pytorch.org/whl/cu130"
 PYTHON_VERSION="3.12"
 MODEL_ID="Qwen/Qwen3.6-27B-FP8"
@@ -52,6 +53,9 @@ REASONING_PARSER="qwen3"
 TOOL_CALL_PARSER="qwen3_coder"
 FORCE_CLEAN="0"
 BACKUP_EXISTING="1"
+PROFILE="standard"
+RESOLVE_VLLM_DEPS="0"
+BUILD_PARALLEL_LEVEL="$(nproc)"
 
 show_help() {
   cat <<EOF
@@ -60,6 +64,7 @@ Usage: $0 [OPTIONS]
 Options:
   --install-dir DIR       Install directory (default: /local_opt/vllm-install)
   --vllm-version VER      vLLM version/tag (default: v0.22.0)
+  --profile NAME          standard or qwen38-v0271 (default: standard)
   --python-version VER    Python version for venv (default: 3.12)
   --force-clean           Remove existing install dir before starting
   --model-id ID           HuggingFace model ID
@@ -73,6 +78,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --install-dir) INSTALL_DIR="$2"; shift 2 ;;
     --vllm-version) VLLM_VERSION="$2"; shift 2 ;;
+    --profile) PROFILE="$2"; shift 2 ;;
     --python-version) PYTHON_VERSION="$2"; shift 2 ;;
     --force-clean) FORCE_CLEAN="1"; shift ;;
     --model-id) MODEL_ID="$2"; shift 2 ;;
@@ -81,6 +87,38 @@ while [[ $# -gt 0 ]]; do
     *) log_error "Unknown option: $1"; show_help ;;
   esac
 done
+
+configure_profile() {
+  case "$PROFILE" in
+    standard)
+      ;;
+    qwen38-v0271)
+      # Keep this isolated from the production v0.22 runtime. v0.27.1 resolves
+      # its own Python requirements after the source checkout rather than using
+      # the historical v0.22 dependency pins below.
+      VLLM_VERSION="v0.27.1"
+      PYTORCH_VERSION="2.13.0"
+      TORCHVISION_VERSION="0.28.0"
+      INSTALL_TORCHAUDIO="0"
+      MODEL_ID="Frozenlock/Qwen3.8-27B-int4-AutoRound"
+      SERVED_MODEL_NAME="mel_llm"
+      MAX_MODEL_LEN="262144"
+      MAX_NUM_SEQS="10"
+      MAX_NUM_BATCHED_TOKENS="32768"
+      GPU_MEMORY_UTILIZATION="0.90"
+      RESOLVE_VLLM_DEPS="1"
+      # CUDA C++ extensions on the shared GB10 host are memory intensive. Keep
+      # the production vLLM service responsive while the new runtime is built.
+      BUILD_PARALLEL_LEVEL="4"
+      ;;
+    *)
+      log_error "Unknown profile: $PROFILE"
+      exit 2
+      ;;
+  esac
+}
+
+configure_profile
 
 check_prerequisites() {
   print_header "Checking prerequisites"
@@ -134,10 +172,14 @@ setup_venv() {
 install_pytorch() {
   print_header "Installing PyTorch CUDA 13.0 stack"
   source "$INSTALL_DIR/.vllm/bin/activate"
-  uv pip install --index-url "$PYTORCH_INDEX_URL" \
-    torch==$PYTORCH_VERSION \
-    torchvision==$TORCHVISION_VERSION \
-    torchaudio==$TORCHAUDIO_VERSION
+  local torch_packages=(
+    "torch==$PYTORCH_VERSION"
+    "torchvision==$TORCHVISION_VERSION"
+  )
+  if [[ "$INSTALL_TORCHAUDIO" == "1" ]]; then
+    torch_packages+=("torchaudio==$TORCHAUDIO_VERSION")
+  fi
+  uv pip install --index-url "$PYTORCH_INDEX_URL" "${torch_packages[@]}"
   python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.cuda.is_available()); print('Device:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"
   log_success "PyTorch CUDA stack installed"
 }
@@ -146,7 +188,12 @@ install_dependencies() {
   print_header "Installing build and runtime dependencies"
   source "$INSTALL_DIR/.vllm/bin/activate"
 
-  uv pip install cmake ninja 'setuptools>=77.0.3,<81.0.0'
+  uv pip install cmake ninja packaging wheel setuptools-rust 'setuptools-scm>=8.0' 'setuptools>=77.0.3,<81.0.0'
+
+  if [[ "$RESOLVE_VLLM_DEPS" == "1" ]]; then
+    log_info "Deferring vLLM Python dependencies to the pinned $VLLM_VERSION source metadata"
+    return
+  fi
 
   # v0.22.0 CUDA deps
   uv pip install \
@@ -213,10 +260,16 @@ build_vllm() {
   cd "${INSTALL_DIR}/vllm"
   export TORCH_CUDA_ARCH_LIST="12.1a"
   export TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas
-  export CMAKE_BUILD_PARALLEL_LEVEL
-  CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)
-  log_info "TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST  CMAKE_BUILD_PARALLEL_LEVEL=$CMAKE_BUILD_PARALLEL_LEVEL"
-  python -m pip install --no-build-isolation --no-deps -e . 2>&1 | tee "${INSTALL_DIR}/vllm-build.log"
+  export CMAKE_BUILD_PARALLEL_LEVEL="$BUILD_PARALLEL_LEVEL"
+  # vLLM's setup.py forwards MAX_JOBS as `cmake --build -j`, overriding the
+  # generic CMAKE_BUILD_PARALLEL_LEVEL during CUDA extension compilation.
+  export MAX_JOBS="$BUILD_PARALLEL_LEVEL"
+  log_info "TORCH_CUDA_ARCH_LIST=$TORCH_CUDA_ARCH_LIST  CMAKE_BUILD_PARALLEL_LEVEL=$CMAKE_BUILD_PARALLEL_LEVEL  MAX_JOBS=$MAX_JOBS"
+  if [[ "$RESOLVE_VLLM_DEPS" == "1" ]]; then
+    python -m pip install --no-build-isolation -e . 2>&1 | tee "${INSTALL_DIR}/vllm-build.log"
+  else
+    python -m pip install --no-build-isolation --no-deps -e . 2>&1 | tee "${INSTALL_DIR}/vllm-build.log"
+  fi
   log_success "vLLM built and installed"
 }
 
@@ -278,6 +331,7 @@ generate_summary() {
   export PATH="/usr/local/cuda/bin:$PATH"
   cat > "${INSTALL_DIR}/ENVIRONMENT_SUMMARY.txt" << SUMMARY_EOF
 Installation time       : $(date)
+Installation profile    : $PROFILE
 Install directory       : $INSTALL_DIR
 vLLM source version/tag : $VLLM_VERSION
 Target model            : $MODEL_ID

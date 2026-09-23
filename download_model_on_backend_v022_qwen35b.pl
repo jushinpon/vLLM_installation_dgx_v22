@@ -60,6 +60,19 @@ use JSON::PP qw(decode_json encode_json);
 # ============================================================================
 
 my %PRESETS = (
+    qwen38_27b_autoround_int4 => {
+        repo_id                   => 'Frozenlock/Qwen3.8-27B-int4-AutoRound',
+        dest_basename             => 'Frozenlock-Qwen3.8-27B-int4-AutoRound',
+        served_model_name         => 'mel_llm',
+        tool_call_parser          => 'qwen3_xml',
+        reasoning_parser          => 'qwen3',
+        gpu_memory_utilization    => '0.90',
+        max_model_len             => '262144',
+        max_num_seqs              => '10',
+        max_num_batched_tokens    => '32768',
+        disable_thinking          => 1,
+        note                      => 'Qwen3.8 27B AutoRound INT4 for the native vLLM 0.27.1 GB10 profile; preserves mel_llm for Hermes.',
+    },
     qwen36_fp8 => {
         repo_id                   => 'Qwen/Qwen3.6-27B-FP8',
         dest_basename             => 'Qwen-Qwen3.6-27B-FP8',
@@ -311,7 +324,7 @@ my %OPT = (
 
     # Current manager/deployment defaults
     manager_script            => 'manage_lab_vllm_from_master_v022_qwen35b.pl',
-    setup_dir                 => ,
+    setup_dir                 => $FindBin::Bin,
 
     backend_port              => 8000,
     gateway_port              => 9000,
@@ -904,7 +917,10 @@ sub apply_preset {
             $OPT{dest_dir},
         ));
 
-        if ($id =~ /gemma-?4/i) {
+        if ($id =~ /qwen3\.8.*27b.*autoround|frozenlock.*qwen3\.8/i) {
+            $preset = 'qwen38_27b_autoround_int4';
+        }
+        elsif ($id =~ /gemma-?4/i) {
             $preset = 'gemma4';
         }
         elsif ($id =~ /qwen3\.6.*35b.*a3b.*fp8|qwen3\.6.*fp8.*35b/i) {
@@ -949,7 +965,7 @@ sub apply_preset {
         $OPT{max_num_batched_tokens} = '32768' if $OPT{max_num_batched_tokens} eq '';
     }
     else {
-        die "Invalid --preset=$preset. Use auto, qwen35, qwen36_fp8, qwen36_nvfp4_text, qwen36_nvfp4, qwen36_awq, gemma4, nemotron_nano_30b_fp8, qwen3_14b_fp8, qwen3_32b_nvfp4, llama_8b_fp8, phi4_reasoning_fp8, or generic.\n";
+        die "Invalid --preset=$preset. Use auto, qwen38_27b_autoround_int4, qwen35, qwen36_fp8, qwen36_nvfp4_text, qwen36_nvfp4, qwen36_awq, gemma4, nemotron_nano_30b_fp8, qwen3_14b_fp8, qwen3_32b_nvfp4, llama_8b_fp8, phi4_reasoning_fp8, or generic.\n";
     }
 }
 

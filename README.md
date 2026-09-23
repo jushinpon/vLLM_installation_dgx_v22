@@ -115,6 +115,46 @@ bash bootstrap_new_cluster_v022_qwen35b.sh --apply-only \
   --backend-host=node13
 ```
 
+### Native Qwen3.8-27B Profile (cluster195)
+
+`deploy_qwen38_27b_native_v0271.sh` deploys
+`Frozenlock/Qwen3.8-27B-int4-AutoRound` without Docker. It uses the
+repository installer, downloader, backend manager, smoke test, and watchdog,
+but keeps its runtime roots isolated from the default Qwen3.6 installation.
+It intentionally preserves the existing backend contract: port `8000`, served
+model name `mel_llm`, default `enable_thinking=false`, and the existing gateway
+configuration. No Hermes provider or model-name change is required.
+
+Run these commands on the master node:
+
+```bash
+cd /home/vLLM_installation_dgx_v22
+
+# Build native vLLM from v0.27.1 source, then fetch the ~18 GiB checkpoint.
+bash ./deploy_qwen38_27b_native_v0271.sh --install
+bash ./deploy_qwen38_27b_native_v0271.sh --download
+
+# Take over node13:8000 only after the build and checkpoint are ready.
+bash ./deploy_qwen38_27b_native_v0271.sh --deploy
+
+# Install the two-minute, three-failure watchdog after smoke/benchmark checks.
+bash ./deploy_qwen38_27b_native_v0271.sh --watchdog
+```
+
+The Qwen3.8 profile uses vLLM source tag `v0.27.1`, PyTorch `2.13.0+cu130`,
+Triton `3.7.1`, `gpu_memory_utilization=0.90`, `max_model_len=262144`,
+`max_num_batched_tokens=32768`, `max_num_seqs=10`, `qwen3_xml` tools,
+`qwen3` reasoning parsing, and MTP speculation (`mtp`, three draft tokens).
+On node13, the direct-backend test with thinking off measured 20.383 completion
+tokens/s at concurrency 1 (three 422-token runs) and 157.547 aggregate
+completion tokens/s at concurrency 10 (1,739 completion tokens in 11.038 s).
+
+The checkpoint is configured as `Qwen3_5ForConditionalGeneration`, but vLLM
+0.27.1 currently reports that it has no registered multimodal processor and
+serves it as text-only. The profile retains the existing multimodal flags for
+interface compatibility, but image input is not a verified capability of this
+checkpoint/runtime combination.
+
 ### Two-Machine Deployment (Rocky Linux master + Ubuntu DGX Spark backend)
 
 This repo supports a common lab layout: a **Rocky Linux** master node that runs

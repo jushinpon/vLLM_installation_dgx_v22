@@ -70,6 +70,7 @@ my %OPT = (
 
     reasoning_parser             => 'qwen3',
     tool_call_parser             => 'qwen3_coder',
+    expected_triton_version      => '3.6.0',
     enable_auto_tool_choice      => 1,
     enable_prefix_caching        => 1,
     enable_chunked_prefill       => 1,
@@ -288,8 +289,8 @@ sub validate_options {
     }
 
     if ($opt->{speculative_method} ne '') {
-        die "Invalid --speculative-method. Use qwen3_next_mtp or qwen3_5_mtp\n"
-            unless $opt->{speculative_method} =~ /^(qwen3_next_mtp|qwen3_5_mtp)$/;
+        die "Invalid --speculative-method. Use mtp, qwen3_next_mtp, or qwen3_5_mtp\n"
+            unless $opt->{speculative_method} =~ /^(mtp|qwen3_next_mtp|qwen3_5_mtp)$/;
     }
 }
 
@@ -362,8 +363,9 @@ sub ensure_runtime_ready {
     my $probe = decode_json(python_json(python_probe_code()));
     die "vLLM validation failed in current venv\n" unless $probe->{ok};
     die "CUDA is not available to PyTorch/vLLM in current venv\n" unless $probe->{cuda_available};
-    die "Expected Triton 3.6.0, got $probe->{triton_version}\n"
-        unless ($probe->{triton_version} || '') =~ /^3\.6\.0/;
+    my $expected_triton = $OPT{expected_triton_version};
+    die "Expected Triton $expected_triton, got $probe->{triton_version}\n"
+        unless ($probe->{triton_version} || '') =~ /^\Q$expected_triton\E(?:[.+-]|$)/;
 
     # verify_symbol(); # DISABLED for SM120 Blackwell - using moe-backend triton
     verify_api_entrypoint();
@@ -820,6 +822,7 @@ sub run_smoke_test {
         '--port', $cfg->{port},
         '--served-model-name', $cfg->{served_model_name},
         '--model', $cfg->{model_id},
+        '--expected-triton-version', $OPT{expected_triton_version},
         '--max-wait', $OPT{smoke_test_timeout},
     );
     push @cmd, '--test-chat' if $OPT{smoke_test_chat};

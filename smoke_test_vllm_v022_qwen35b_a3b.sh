@@ -50,6 +50,7 @@ CHAT_MAX_TOKENS="256"
 CHAT_TEMPERATURE="0"
 REASONING_PARSER="qwen3"
 TOOL_CALL_PARSER="qwen3_coder"
+EXPECTED_TRITON_VERSION="3.6.0"
 
 TEST_CHAT=0
 KEEP_SERVER=0
@@ -163,6 +164,10 @@ Model/server options:
       Tool-call parser.
       Default: qwen3_xml
 
+  --expected-triton-version VERSION
+      Required Triton version prefix.
+      Default: 3.6.0
+
   --no-reasoning-parser
       Do not pass --reasoning-parser.
 
@@ -236,6 +241,7 @@ while [[ $# -gt 0 ]]; do
     --chat-temperature) CHAT_TEMPERATURE="$2"; shift 2 ;;
     --reasoning-parser) REASONING_PARSER="$2"; shift 2 ;;
     --tool-call-parser) TOOL_CALL_PARSER="$2"; shift 2 ;;
+    --expected-triton-version) EXPECTED_TRITON_VERSION="$2"; shift 2 ;;
     --test-chat) TEST_CHAT=1; shift ;;
     --keep-server) KEEP_SERVER=1; shift ;;
     --enforce-eager) ENFORCE_EAGER=1; shift ;;
@@ -338,8 +344,9 @@ print_config() {
 verify_python_environment() {
   log_info "Verifying Python environment..."
 
-  python - <<'PY'
+  if ! EXPECTED_TRITON_VERSION="$EXPECTED_TRITON_VERSION" python - <<'PY'
 import inspect
+import os
 import torch
 import triton
 import transformers
@@ -353,13 +360,18 @@ print("vllm file:", getattr(vllm, "__file__", None))
 print("cuda:", torch.cuda.is_available())
 
 assert torch.cuda.is_available(), "CUDA is not available"
-assert triton.__version__.startswith("3.6.0"), f"Expected Triton 3.6.0, got {triton.__version__}"
+expected_triton = os.environ["EXPECTED_TRITON_VERSION"]
+assert triton.__version__.startswith(expected_triton), f"Expected Triton {expected_triton}, got {triton.__version__}"
 assert getattr(vllm, "__file__", None) is not None, "vLLM import path is invalid"
 
 if torch.cuda.is_available():
     print("device:", torch.cuda.get_device_name(0))
     print("capability:", torch.cuda.get_device_capability(0))
 PY
+  then
+    log_fail "Python environment verification failed"
+    exit 1
+  fi
 
   log_pass "Python environment verification passed"
 }
@@ -367,12 +379,16 @@ PY
 check_native_extension() {
   log_info "Checking vLLM native extension for GB10/SM100 MoE symbol..."
 
-  if [[ ! -f "$INSTALL_DIR/vllm/vllm/_C.abi3.so" ]]; then
-    log_warn "Native extension not found: $INSTALL_DIR/vllm/vllm/_C.abi3.so"
-    # exit 1 (non-fatal with triton MoE backend)
+  local extension="$INSTALL_DIR/vllm/vllm/_C.abi3.so"
+  if [[ ! -f "$extension" ]]; then
+    extension="$INSTALL_DIR/vllm/vllm/_C_stable_libtorch.abi3.so"
+  fi
+  if [[ ! -f "$extension" ]]; then
+    log_warn "Native extension not found under $INSTALL_DIR/vllm/vllm"
+    return 0
   fi
 
-  nm -D "$INSTALL_DIR/vllm/vllm/_C.abi3.so" \
+  nm -D "$extension" \
     | c++filt \
     | grep -i cutlass_moe_mm_sm100 \
     | grep " T " >/dev/null || {

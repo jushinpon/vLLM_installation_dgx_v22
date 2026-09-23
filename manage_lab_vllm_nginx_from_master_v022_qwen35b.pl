@@ -21,6 +21,14 @@ my %OPT = (
     backend_port           => 8000,
     backend_ssh_user       => 'root',
     backend_bind_host      => '0.0.0.0',
+    backend_install_root   => '',
+    backend_venv_root      => '',
+    backend_vllm_src_root  => '',
+    backend_expected_triton_version => '',
+    backend_stack_root     => '',
+    backend_cache_root     => '',
+    backend_hf_root        => '',
+    backend_tmp_root       => '',
     gateway_port           => 9000,
     model_id               => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
     served_model_name      => 'mel_llm',
@@ -175,6 +183,21 @@ sub backend_action {
     set_watchdog_maintenance($action) if $maintenance;
 
     my @cmd = ('perl', $BKEND_SCRIPT, $action);
+    my @runtime_roots = (
+        ['backend_install_root',  'install-root'],
+        ['backend_venv_root',     'venv-root'],
+        ['backend_vllm_src_root', 'vllm-src-root'],
+        ['backend_stack_root',    'stack-root'],
+        ['backend_cache_root',    'cache-root'],
+        ['backend_hf_root',       'hf-root'],
+        ['backend_tmp_root',      'tmp-root'],
+    );
+    for my $entry (@runtime_roots) {
+        my ($key, $flag) = @$entry;
+        push @cmd, "--$flag=$OPT{$key}" if $OPT{$key} ne '';
+    }
+    push @cmd, "--expected-triton-version=$OPT{backend_expected_triton_version}"
+        if $OPT{backend_expected_triton_version} ne '';
 
     if ($action eq 'start' || $action eq 'restart') {
         push @cmd, "--host=$OPT{backend_bind_host}",
@@ -351,6 +374,22 @@ sub install_watchdog {
         $watchdog_thinking = 'enabled';
     }
     my $watchdog_extra_args    = '';
+    my @watchdog_runtime_roots = (
+        ['backend_install_root',  'backend-install-root'],
+        ['backend_venv_root',     'backend-venv-root'],
+        ['backend_vllm_src_root', 'backend-vllm-src-root'],
+        ['backend_stack_root',    'backend-stack-root'],
+        ['backend_cache_root',    'backend-cache-root'],
+        ['backend_hf_root',       'backend-hf-root'],
+        ['backend_tmp_root',      'backend-tmp-root'],
+    );
+    for my $entry (@watchdog_runtime_roots) {
+        my ($key, $flag) = @$entry;
+        $watchdog_extra_args .= "      --$flag=" . shell_quote($OPT{$key}) . " \\\n"
+            if $OPT{$key} ne '';
+    }
+    $watchdog_extra_args .= "      --backend-expected-triton-version=" . shell_quote($OPT{backend_expected_triton_version}) . " \\\n"
+        if $OPT{backend_expected_triton_version} ne '';
     $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
         if $OPT{default_chat_template_kwargs};
     $watchdog_extra_args .= $OPT{language_model_only}
