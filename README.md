@@ -181,7 +181,7 @@ an image URL in plain text:
 The current cluster195 node13 deployment is
 nvidia/Qwen3.8-27B-NVFP4 with incoai/Qwen3.8-27B-DFlash2 speculative
 decoding. It preserves the public mel_llm model name, uses an FP8 KV cache, a
-65,536-token context window, and accepts two images per prompt. The service
+262,144-token context window, and accepts two images per prompt. The service
 defaults to thinking off.
 
 For the profile parameters, rollback command, and benchmark history, see
@@ -298,7 +298,7 @@ Expected state:
 
 - Gateway is active on master port `9000`.
 - Backend `node13:8000` returns model `mel_llm`.
-- `/v1/models` reports `max_model_len: 65536`.
+- `/v1/models` reports `max_model_len: 262144`.
 - Watchdog log shows `PROBE_OK`.
 
 If Hermes Desktop or another OpenAI-compatible client mis-detects the model as

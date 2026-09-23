@@ -62,7 +62,7 @@ perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen
   --num-speculative-tokens=7 \
   --draft-sample-method=probabilistic \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=65536
+  --max-model-len=262144
 ```
 
 ## Rollback to MTP
@@ -75,7 +75,7 @@ perl /home/vLLM_installation_dgx_v22/manage_lab_vllm_nginx_from_master_v022_qwen
   --speculative-method=mtp \
   --num-speculative-tokens=3 \
   --gpu-memory-utilization=0.85 \
-  --max-model-len=65536
+  --max-model-len=262144
 ```
 
 ## Files Modified
