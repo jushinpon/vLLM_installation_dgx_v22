@@ -9,7 +9,7 @@
 #
 # Purpose:
 #   - Verify the current vLLM environment created by install_vllm-v022.sh.
-#   - Verify PyTorch CUDA, Triton 3.6.0, vLLM import, and GB10 native extension.
+#   - Verify PyTorch CUDA, Triton 3.7.1, vLLM import, and GB10 native extension.
 #   - Reuse an existing vLLM server if it is already responding.
 #   - Otherwise start a vLLM OpenAI-compatible API server.
 #   - Test /v1/models.
@@ -50,7 +50,7 @@ CHAT_MAX_TOKENS="256"
 CHAT_TEMPERATURE="0"
 REASONING_PARSER="qwen3"
 TOOL_CALL_PARSER="qwen3_coder"
-EXPECTED_TRITON_VERSION="3.6.0"
+EXPECTED_TRITON_VERSION="3.7.1"
 
 TEST_CHAT=0
 KEEP_SERVER=0
@@ -166,7 +166,7 @@ Model/server options:
 
   --expected-triton-version VERSION
       Required Triton version prefix.
-      Default: 3.6.0
+      Default: 3.7.1
 
   --no-reasoning-parser
       Do not pass --reasoning-parser.
