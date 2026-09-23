@@ -26,10 +26,17 @@
 
 | Test | Tokens | Time | Speed |
 |---|---|---|---|
-| Long generation (1024 tokens) | 1024 | 14.6s | **70.1 tok/s** |
-| Short run 1 | 152 | 5.7s | 26.4 tok/s |
-| Short run 2 | 132 | 4.1s | 32.0 tok/s |
-| Short run 3 | 159 | 5.6s | 28.5 tok/s |
+| Historical long generation (1024 tokens) | 1024 | 14.6s | **70.1 tok/s** |
+| Historical short run 1 | 152 | 5.7s | 26.4 tok/s |
+| Historical short run 2 | 132 | 4.1s | 32.0 tok/s |
+| Historical short run 3 | 159 | 5.6s | 28.5 tok/s |
+
+The historical numbers used a different workload and must not be compared
+directly with the fixed gateway C1 benchmark. On 2026-09-23, the fixed C1
+gateway test completed 1,390 tokens in 60.781 seconds: **22.87 completion
+tokens/s** over three successful thinking-off responses. The external
+fresh-code workload was also reproduced directly on node13 at **48.19
+completion tokens/s** for 400 output tokens.
 
 ### Comparison
 

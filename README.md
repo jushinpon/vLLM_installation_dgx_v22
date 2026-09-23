@@ -176,6 +176,19 @@ an image URL in plain text:
 }
 ```
 
+### Current Production Profile: Qwen3.8 NVFP4 + DFlash2
+
+The current cluster195 node13 deployment is
+nvidia/Qwen3.8-27B-NVFP4 with incoai/Qwen3.8-27B-DFlash2 speculative
+decoding. It preserves the public mel_llm model name, uses an FP8 KV cache, a
+65,536-token context window, and accepts two images per prompt. The service
+defaults to thinking off.
+
+For the profile parameters, rollback command, and benchmark history, see
+[README_dflash2.md](README_dflash2.md). Use
+benchmark_vllm_token_rate_v022_qwen35b.pl with model=mel_llm for the current
+gateway contract; that is now the benchmark default.
+
 ### Two-Machine Deployment (Rocky Linux master + Ubuntu DGX Spark backend)
 
 This repo supports a common lab layout: a **Rocky Linux** master node that runs

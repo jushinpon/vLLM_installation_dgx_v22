@@ -22,9 +22,7 @@ use POSIX qw(strftime);
 #        http://node09:8000/v1     when running from master
 #
 # Current typical models:
-#   qwen3.5-35b-a3b
-#   qwen3.6-27b-fp8
-#   qwen3.6-27b-fp8
+#   mel_llm
 #
 # What it measures:
 #   - Non-streaming wall-clock completion time.
@@ -40,21 +38,21 @@ use POSIX qw(strftime);
 #   From master, test both master gateway and node09 backend:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
 #       --target=both \
-#       --model=qwen3.6-27b-fp8 \
+#       --model=mel_llm \
 #       --api-key=YOUR_STUDENT_TOKEN \
 #       --node09-url=http://node09:8000/v1
 #
 #   From master, test gateway only:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
 #       --target=master \
-#       --model=qwen3.6-27b-fp8 \
+#       --model=mel_llm \
 #       --api-key=YOUR_STUDENT_TOKEN
 #
 #   From node09, test backend directly:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
 #       --target=node09 \
 #       --node09-url=http://127.0.0.1:8000/v1 \
-#       --model=qwen3.6-27b-fp8 \
+#       --model=mel_llm \
 #       --allow-no-api-key
 # =============================================================================
 
@@ -69,7 +67,7 @@ my %OPT = (
     node09_api_key            => '',
     allow_no_api_key          => 0,
 
-    model                     => 'qwen3.6-27b-fp8',
+    model                     => 'mel_llm',
 
     prompt                    => 'Write a concise 300-word explanation of what vLLM does.',
     prompt_file               => '',
@@ -660,7 +658,7 @@ Common options:
       Allows testing endpoints without Authorization header.
 
   --model=MODEL
-      Default: qwen3.6-27b-fp8
+      Default: mel_llm
 
   --runs=N
       Default: 3
@@ -704,7 +702,7 @@ Examples:
   From master, test both master gateway and node09 backend:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
       --target=both \
-      --model=qwen3.6-27b-fp8 \
+      --model=mel_llm \
       --api-key=YOUR_STUDENT_TOKEN \
       --node09-url=http://node09:8000/v1 \
       --runs=3 \
@@ -713,20 +711,20 @@ Examples:
   From master, test gateway only:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
       --target=master \
-      --model=qwen3.6-27b-fp8 \
+      --model=mel_llm \
       --api-key=YOUR_STUDENT_TOKEN
 
   From node09, test backend directly:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
       --target=node09 \
       --node09-url=http://127.0.0.1:8000/v1 \
-      --model=qwen3.6-27b-fp8 \
+      --model=mel_llm \
       --allow-no-api-key
 
   Save CSV:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
       --target=both \
-      --model=qwen3.6-27b-fp8 \
+      --model=mel_llm \
       --api-key=YOUR_STUDENT_TOKEN \
       --csv=/tmp/vllm_benchmark.csv
 USAGE

@@ -415,9 +415,9 @@ sub install_watchdog {
         if $OPT{speculative_method};
     $watchdog_extra_args .= "      --num-speculative-tokens=" . shell_quote($OPT{num_speculative_tokens}) . " \\\n"
         if $OPT{num_speculative_tokens};
-    $watchdog_extra_args .= "      --speculative-model=" . shell_quote($OPT{speculative_model}) . " \n"
+    $watchdog_extra_args .= "      --speculative-model=" . shell_quote($OPT{speculative_model}) . " \\\n"
         if $OPT{speculative_model};
-    $watchdog_extra_args .= "      --draft-sample-method=" . shell_quote($OPT{draft_sample_method}) . " \n"
+    $watchdog_extra_args .= "      --draft-sample-method=" . shell_quote($OPT{draft_sample_method}) . " \\\n"
         if $OPT{draft_sample_method};
     $watchdog_extra_args .= "      --performance-mode=" . shell_quote($OPT{performance_mode}) . " \\\n"
         if $OPT{performance_mode};

@@ -19,9 +19,10 @@ usage() {
 Usage: deploy_qwen38_27b_dflash2.sh [options]
 
 Actions:
-  --all        Download draft model + deploy backend
+  --all        Download draft model, deploy backend, and install watchdog
   --download   Download draft model only
   --deploy     Deploy backend only (assumes model already downloaded)
+  --watchdog   Install the DFlash2 watchdog profile only
 
 Options:
   --backend-host HOST   (default: node13)
@@ -30,11 +31,12 @@ EOF
 }
 
 ACTION="all"
-while [[ 0 -gt 0 ]]; do
+while [[ $# -gt 0 ]]; do
   case "$1" in
     --all) ACTION="all"; shift ;;
     --download) ACTION="download"; shift ;;
     --deploy) ACTION="deploy"; shift ;;
+    --watchdog) ACTION="watchdog"; shift ;;
     --backend-host) BACKEND_HOST="$2"; shift 2 ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown: $1" >&2; exit 2 ;;
@@ -51,8 +53,14 @@ deploy_backend() {
   perl "$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl" backend-restart     --backend-host="$BACKEND_HOST"     --backend-install-root="$RUNTIME_ROOT"     --backend-venv-root="$RUNTIME_ROOT/.vllm"     --backend-vllm-src-root="$RUNTIME_ROOT/vllm"     --backend-stack-root="$STACK_ROOT"     --backend-cache-root="$CACHE_ROOT"     --backend-hf-root="$HF_ROOT"     --backend-tmp-root="$TMP_ROOT"     --model-id="$TARGET_MODEL"     --served-model-name=mel_llm     --gpu-memory-utilization=0.85     --max-model-len=65536     --max-num-batched-tokens=16384     --max-num-seqs=10     --kv-cache-dtype=fp8     --tool-call-parser=qwen3_xml     --reasoning-parser=qwen3     --default-chat-template-kwargs='{"enable_thinking":false}'     --no-language-model-only     --limit-mm-per-prompt='{"image":2}'     --speculative-method=dflash     --speculative-model="$DRAFT_MODEL"     --num-speculative-tokens=7     --draft-sample-method=probabilistic     --smoke-test-after-start
 }
 
+install_watchdog() {
+  echo "=== Installing DFlash 2 watchdog ==="
+  perl "$SETUP_DIR/manage_lab_vllm_nginx_from_master_v022_qwen35b.pl" install-watchdog     --backend-host="$BACKEND_HOST"     --backend-install-root="$RUNTIME_ROOT"     --backend-venv-root="$RUNTIME_ROOT/.vllm"     --backend-vllm-src-root="$RUNTIME_ROOT/vllm"     --backend-stack-root="$STACK_ROOT"     --backend-cache-root="$CACHE_ROOT"     --backend-hf-root="$HF_ROOT"     --backend-tmp-root="$TMP_ROOT"     --model-id="$TARGET_MODEL"     --served-model-name=mel_llm     --gpu-memory-utilization=0.85     --max-model-len=65536     --max-num-batched-tokens=16384     --max-num-seqs=10     --kv-cache-dtype=fp8     --tool-call-parser=qwen3_xml     --reasoning-parser=qwen3     --default-chat-template-kwargs='{"enable_thinking":false}'     --no-language-model-only     --limit-mm-per-prompt='{"image":2}'     --speculative-method=dflash     --speculative-model="$DRAFT_MODEL"     --num-speculative-tokens=7     --draft-sample-method=probabilistic
+}
+
 case "$ACTION" in
-  all) download_draft && deploy_backend ;;
+  all) download_draft && deploy_backend && install_watchdog ;;
   download) download_draft ;;
   deploy) deploy_backend ;;
+  watchdog) install_watchdog ;;
 esac
