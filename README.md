@@ -149,11 +149,27 @@ On node13, the direct-backend test with thinking off measured 20.383 completion
 tokens/s at concurrency 1 (three 422-token runs) and 157.547 aggregate
 completion tokens/s at concurrency 10 (1,739 completion tokens in 11.038 s).
 
-The checkpoint is configured as `Qwen3_5ForConditionalGeneration`, but vLLM
-0.27.1 currently reports that it has no registered multimodal processor and
-serves it as text-only. The profile retains the existing multimodal flags for
-interface compatibility, but image input is not a verified capability of this
-checkpoint/runtime combination.
+The checkpoint is configured as `Qwen3_5ForConditionalGeneration` and runs
+with the vLLM Qwen3 vision processor. It accepts OpenAI-compatible
+`image_url` content, with up to four images per prompt. This was verified on
+node13 through the live API: a generated red PNG returned `Red` when asked for
+its dominant color. Do not enable `--language-model-only` for this profile.
+
+An image-recognition request must use a structured message rather than placing
+an image URL in plain text:
+
+```json
+{
+  "model": "mel_llm",
+  "messages": [{
+    "role": "user",
+    "content": [
+      {"type": "image_url", "image_url": {"url": "data:image/png;base64,..."}},
+      {"type": "text", "text": "Describe this image."}
+    ]
+  }]
+}
+```
 
 ### Two-Machine Deployment (Rocky Linux master + Ubuntu DGX Spark backend)
 
