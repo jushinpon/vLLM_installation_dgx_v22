@@ -71,15 +71,14 @@ runtime_args=(
   "--kv-cache-dtype=fp8"
   "--max-model-len=262144"
   "--max-num-batched-tokens=32768"
-  "--max-num-seqs=10"
+  "--max-num-seqs=20"
   "--tool-call-parser=qwen3_xml"
   "--reasoning-parser=qwen3"
   "--default-chat-template-kwargs={\"enable_thinking\":false}"
   "--no-language-model-only"
   "--limit-mm-per-prompt={\"image\":4}"
   "--speculative-method=mtp"
-  "--performance-mode="
-  "--optimization-level="
+  "--enable-prompt-tokens-details"
 )
 
 install_runtime() {

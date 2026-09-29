@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# LEGACY: Perl prefork gateway manager. Production uses the nginx manager.
 use strict;
 use FindBin;
 use warnings;
@@ -86,6 +87,7 @@ use HTTP::Tiny;
 # =============================================================================
 
 my %OPT = (
+    # LEGACY cluster166 manager defaults; use the Qwen3.8 manager for cluster195.
     action                       => shift(@ARGV) || 'show',
 
     # Backend SSH side
@@ -111,7 +113,7 @@ my %OPT = (
 
     # Backend vLLM settings
     model_id                     => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
-    served_model_name            => 'mel_llm'',
+    served_model_name            => 'mel_llm',
     backend_bind_host            => '0.0.0.0',
     backend_port                 => 8000,
     gpu_memory_utilization       => '0.70',
@@ -138,8 +140,8 @@ my %OPT = (
     # Gateway settings
     gateway_host                 => '0.0.0.0',
     gateway_port                 => 9000,
-    public_model_name            => 'mel_llm'',
-    backend_model_name           => 'mel_llm'',
+    public_model_name            => 'mel_llm',
+    backend_model_name           => 'mel_llm',
     rpm_limit                    => 60,
     max_concurrent_per_student   => 4,
     client_timeout               => 60,

@@ -18,7 +18,7 @@ use JSON::PP qw(decode_json);
 #
 # Current student-facing gateway:
 #   Base URL : http://MASTER_PUBLIC_IP:9000/v1
-#   Model    : qwen3.5-35b-a3b
+#   Model    : mel_llm
 #   API key  : student token from gateway add-student/list-students
 #
 # Why max_tokens default is 512:
@@ -372,7 +372,7 @@ Required for backend-direct testing without API key:
   --allow-no-api-key
 
 Current lab defaults:
-  --model=qwen3.5-35b-a3b
+  --model=mel_llm
   --max-tokens=512
   --timeout-sec=300
   --retries=3
@@ -380,7 +380,7 @@ Current lab defaults:
 
 Options:
   --model=MODEL
-      Default: qwen3.5-35b-a3b
+      Default: mel_llm
 
   --timeout-sec=N
       PowerShell Invoke-RestMethod timeout.
@@ -424,15 +424,15 @@ Examples from Windows PowerShell or CMD:
     perl test_vllm_ps_v022_qwen35b_a3b.pl ^
       --base-url=http://MASTER_PUBLIC_IP:9000/v1 ^
       --api-key=YOUR_STUDENT_TOKEN ^
-      --model=qwen3.5-35b-a3b ^
+      --model=mel_llm ^
       --max-tokens=512 ^
       --timeout-sec=300
 
   Test backend directly without API key:
     perl test_vllm_ps_v022_qwen35b_a3b.pl ^
-      --base-url=http://node09:8000/v1 ^
+      --base-url=http://node13:8000/v1 ^
       --allow-no-api-key ^
-      --model=qwen3.5-35b-a3b
+      --model=mel_llm
 
   Only test model list:
     perl test_vllm_ps_v022_qwen35b_a3b.pl ^

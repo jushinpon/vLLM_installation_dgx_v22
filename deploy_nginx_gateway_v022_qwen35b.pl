@@ -16,6 +16,11 @@ my $NGINX_ERR_LOG  = '/var/log/nginx/vllm-gateway-error.log';
 my $PID_FILE       = '/var/run/nginx.pid';
 
 my $action = shift @ARGV || 'status';
+sub secure_gateway_files {
+    chmod 0600, $STUDENTS_FILE if -f $STUDENTS_FILE;
+    chmod 0600, $CONFIG_FILE if -f $CONFIG_FILE;
+}
+
 
 sub main {
     my $actions = {
@@ -42,6 +47,7 @@ sub main {
 }
 
 sub setup {
+    secure_gateway_files();
     print "=== Installing nginx... ===\n";
     my $inst = system("rpm -q nginx >/dev/null 2>&1");
     if ($inst != 0) {
@@ -69,6 +75,7 @@ sub setup {
 }
 
 sub generate_nginx_config {
+    secure_gateway_files();
     my $cfg = read_config();
     my $students = read_students();
 
@@ -130,6 +137,22 @@ server {
         return 200 '{"status":"ok","public_model":"$public_model","backend_host":"$backend_host","backend_port":$backend_port,"gateway_port":$gw_port}';
     }
 
+    location = /metrics {
+        if (\$gw_student_id = "") {
+            add_header WWW-Authenticate 'Bearer realm="vllm-gateway-metrics"' always;
+            return 401 '{"error":"missing or invalid token"}';
+        }
+
+        proxy_pass $backend/metrics;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $backend_host:$backend_port;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_buffering off;
+    }
+
     location /v1/ {
         if (\$gw_student_id = "") {
             add_header WWW-Authenticate 'Bearer realm="vllm-gateway"' always;
@@ -161,6 +184,7 @@ NGINX_CONF
     open my $fh, '>', $NGINX_CONF or die "Cannot write $NGINX_CONF: $!\n";
     print $fh $conf;
     close $fh;
+    chmod 0600, $CONFIG_FILE if -f $CONFIG_FILE;
     print "Generated: $NGINX_CONF\n";
 }
 
@@ -237,11 +261,13 @@ sub read_students {
 }
 
 sub write_students {
+    secure_gateway_files();
     my ($data) = @_;
     make_path("$GATEWAY_DIR/config");
     open my $fh, '>', $STUDENTS_FILE or die "Cannot write $STUDENTS_FILE: $!\n";
     print $fh encode_json({students => $data}) . "\n";
     close $fh;
+    chmod 0600, $STUDENTS_FILE or die "Cannot chmod $STUDENTS_FILE: $!\n";
 }
 
 sub gen_token {

@@ -17,9 +17,9 @@ use POSIX qw(strftime);
 #        http://127.0.0.1:9000/v1
 #        http://MASTER_PUBLIC_IP:9000/v1
 #
-#   2. node09 backend:
-#        http://127.0.0.1:8000/v1  when running on node09
-#        http://node09:8000/v1     when running from master
+#   2. node13 backend:
+#        http://127.0.0.1:8000/v1  when running on node13
+#        http://node13:8000/v1     when running from master
 #
 # Current typical models:
 #   mel_llm
@@ -35,12 +35,12 @@ use POSIX qw(strftime);
 #
 # Examples:
 #
-#   From master, test both master gateway and node09 backend:
+#   From master, test both master gateway and node13 backend:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
 #       --target=both \
 #       --model=mel_llm \
 #       --api-key=YOUR_STUDENT_TOKEN \
-#       --node09-url=http://node09:8000/v1
+#       --node13-url=http://node13:8000/v1
 #
 #   From master, test gateway only:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
@@ -48,23 +48,23 @@ use POSIX qw(strftime);
 #       --model=mel_llm \
 #       --api-key=YOUR_STUDENT_TOKEN
 #
-#   From node09, test backend directly:
+#   From node13, test backend directly:
 #     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
-#       --target=node09 \
-#       --node09-url=http://127.0.0.1:8000/v1 \
+#       --target=node13 \
+#       --node13-url=http://127.0.0.1:8000/v1 \
 #       --model=mel_llm \
 #       --allow-no-api-key
 # =============================================================================
 
 my %OPT = (
-    target                    => 'both',   # master | node09 | both | custom
+    target                    => 'both',   # master | node13 | both | custom
 
     master_url                => 'http://127.0.0.1:9000/v1',
-    node09_url                => 'http://node09:8000/v1',
+    node13_url                => 'http://node13:8000/v1',
     custom_url                => '',
 
     api_key                   => $ENV{LAB_VLLM_API_KEY} || $ENV{VLLM_API_KEY} || '',
-    node09_api_key            => '',
+    node13_api_key            => '',
     allow_no_api_key          => 0,
 
     model                     => 'mel_llm',
@@ -118,11 +118,11 @@ sub main {
             api_key => $OPT{api_key},
         };
     }
-    elsif ($OPT{target} eq 'node09') {
+    elsif ($OPT{target} eq 'node13') {
         push @targets, {
-            label   => 'node09-backend',
-            url     => normalize_url($OPT{node09_url}),
-            api_key => $OPT{node09_api_key},
+            label   => 'node13-backend',
+            url     => normalize_url($OPT{node13_url}),
+            api_key => $OPT{node13_api_key},
         };
     }
     elsif ($OPT{target} eq 'both') {
@@ -132,9 +132,9 @@ sub main {
             api_key => $OPT{api_key},
         };
         push @targets, {
-            label   => 'node09-backend',
-            url     => normalize_url($OPT{node09_url}),
-            api_key => $OPT{node09_api_key},
+            label   => 'node13-backend',
+            url     => normalize_url($OPT{node13_url}),
+            api_key => $OPT{node13_api_key},
         };
     }
     elsif ($OPT{target} eq 'custom') {
@@ -146,7 +146,7 @@ sub main {
         };
     }
     else {
-        die "Invalid --target=$OPT{target}. Use master, node09, both, or custom.\n";
+        die "Invalid --target=$OPT{target}. Use master, node13, both, or custom.\n";
     }
 
     print_header();
@@ -177,7 +177,7 @@ sub print_header {
     print "Request disable thinking  : " . ($OPT{request_disable_thinking} ? 'yes' : 'no') . "\n";
     print "Prompt chars              : " . length($OPT{prompt}) . "\n";
     print "Master URL                : " . normalize_url($OPT{master_url}) . "\n";
-    print "Node09 URL                : " . normalize_url($OPT{node09_url}) . "\n";
+    print "Node13 URL                : " . normalize_url($OPT{node13_url}) . "\n";
     print "\n";
 }
 
@@ -194,7 +194,7 @@ sub benchmark_endpoint {
     print "API key : " . ($api_key ? 'enabled' : 'disabled') . "\n";
     print "========================================\n";
 
-    if (!$api_key && !$OPT{allow_no_api_key} && $label ne 'node09-backend') {
+    if (!$api_key && !$OPT{allow_no_api_key} && $label ne 'node13-backend') {
         die "API key is required for $label. Use --api-key=TOKEN or --allow-no-api-key.\n";
     }
 
@@ -633,16 +633,16 @@ Usage:
   perl benchmark_vllm_token_rate_v022_qwen35b.pl [options]
 
 Common options:
-  --target=master|node09|both|custom
+  --target=master|node13|both|custom
       Default: both
 
   --master-url=http://127.0.0.1:9000/v1
       Default: http://127.0.0.1:9000/v1
 
-  --node09-url=http://node09:8000/v1
-      Default: http://node09:8000/v1
-      If running on node09 itself, use:
-      --node09-url=http://127.0.0.1:8000/v1
+  --node13-url=http://node13:8000/v1
+      Default: http://node13:8000/v1
+      If running on node13 itself, use:
+      --node13-url=http://127.0.0.1:8000/v1
 
   --custom-url=http://HOST:PORT/v1
       Required when --target=custom.
@@ -651,7 +651,7 @@ Common options:
       Required for master gateway unless --allow-no-api-key is used.
       You may also set LAB_VLLM_API_KEY or VLLM_API_KEY.
 
-  --node09-api-key=TOKEN
+  --node13-api-key=TOKEN
       Optional. Backend direct usually has no API key in your current setup.
 
   --allow-no-api-key
@@ -699,12 +699,12 @@ Output options:
 
 Examples:
 
-  From master, test both master gateway and node09 backend:
+  From master, test both master gateway and node13 backend:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
       --target=both \
       --model=mel_llm \
       --api-key=YOUR_STUDENT_TOKEN \
-      --node09-url=http://node09:8000/v1 \
+      --node13-url=http://node13:8000/v1 \
       --runs=3 \
       --warmup=1
 
@@ -714,10 +714,10 @@ Examples:
       --model=mel_llm \
       --api-key=YOUR_STUDENT_TOKEN
 
-  From node09, test backend directly:
+  From node13, test backend directly:
     perl benchmark_vllm_token_rate_v022_qwen35b.pl \
-      --target=node09 \
-      --node09-url=http://127.0.0.1:8000/v1 \
+      --target=node13 \
+      --node13-url=http://127.0.0.1:8000/v1 \
       --model=mel_llm \
       --allow-no-api-key
 

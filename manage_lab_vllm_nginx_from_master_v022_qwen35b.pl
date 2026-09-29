@@ -21,38 +21,39 @@ my %OPT = (
     backend_port           => 8000,
     backend_ssh_user       => 'root',
     backend_bind_host      => '0.0.0.0',
-    backend_install_root   => '',
-    backend_venv_root      => '',
-    backend_vllm_src_root  => '',
-    backend_expected_triton_version => '',
-    backend_stack_root     => '',
-    backend_cache_root     => '',
-    backend_hf_root        => '',
-    backend_tmp_root       => '',
+    backend_install_root   => '/local_opt/vllm-install-qwen38-v0271',
+    backend_venv_root      => '/local_opt/vllm-install-qwen38-v0271/.vllm',
+    backend_vllm_src_root  => '/local_opt/vllm-install-qwen38-v0271/vllm',
+    backend_expected_triton_version => '3.7.1',
+    backend_stack_root     => '/local_opt/vllm-service-qwen38-v0271',
+    backend_cache_root     => '/local_opt/vllm-cache-qwen38-v0271',
+    backend_hf_root        => '/local_opt/hf-vllm-qwen38-v0271',
+    backend_tmp_root       => '/local_opt/tmp-vllm-qwen38-v0271',
     gateway_port           => 9000,
-    model_id               => '/local_opt/vllm-models/Qwen-Qwen3.6-35B-A3B-FP8',
+    model_id               => '/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4',
     served_model_name      => 'mel_llm',
     public_model_name      => 'mel_llm',
     backend_model_name     => 'mel_llm',
-    gpu_memory_utilization => '0.85',
+    gpu_memory_utilization => '0.75',
     max_model_len          => '262144',
-    max_num_batched_tokens => '32768',
-    max_num_seqs           => '10',
+    max_num_batched_tokens => '16384',
+    max_num_seqs           => '20',
     reasoning_parser       => 'qwen3',
-    tool_call_parser       => 'qwen3_coder',
+    tool_call_parser       => 'qwen3_xml',
     disable_thinking             => 0,
     default_chat_template_kwargs => '{"enable_thinking": false}',
-    kv_cache_dtype         => '',
+    kv_cache_dtype         => 'fp8',
     device                 => '',
     language_model_only          => 0,
-    limit_mm_per_prompt          => '{"image":4}',
+    limit_mm_per_prompt          => '{"image":12}',
     backend_api_key        => '',
     backend_extra_args     => '',
+    enable_prompt_tokens_details => 1,
     speculative_config     => '',
-    speculative_method     => 'qwen3_next_mtp',
-    num_speculative_tokens => '3',
-    speculative_model     => '',
-    draft_sample_method   => '',
+    speculative_method     => 'dflash',
+    num_speculative_tokens => '7',
+    speculative_model     => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
+    draft_sample_method   => 'probabilistic',
     performance_mode       => 'throughput',
     optimization_level     => '2',
     smoke_test_after_start => 1,
@@ -229,6 +230,7 @@ sub backend_action {
         push @cmd, "--optimization-level=$OPT{optimization_level}" if $OPT{optimization_level} ne '';
         push @cmd, '--disable-thinking' if $OPT{disable_thinking};
         push @cmd, "--api-key=$OPT{backend_api_key}" if $OPT{backend_api_key};
+        push @cmd, '--enable-prompt-tokens-details' if $OPT{enable_prompt_tokens_details};
         push @cmd, '--smoke-test-after-start' if $OPT{smoke_test_after_start};
     }
 
@@ -423,6 +425,8 @@ sub install_watchdog {
         if $OPT{performance_mode};
     $watchdog_extra_args .= "      --optimization-level=" . shell_quote($OPT{optimization_level}) . " \\\n"
         if $OPT{optimization_level} ne '';
+    $watchdog_extra_args .= "      --enable-prompt-tokens-details \\\n"
+        if $OPT{enable_prompt_tokens_details};
     $watchdog_extra_args .= "      --disable-thinking \\\n" if $OPT{disable_thinking};
 
     open my $fh, '>', $watchdog or die "Cannot write $watchdog: $!\n";
@@ -504,11 +508,11 @@ capture_forensics() {
   journalctl -k --since '-30 minutes' --no-pager > "\$out_dir/master_kernel_last_30m.log" 2>&1 || true
 
   if [ -x "\$BACKEND_FORENSICS_SCRIPT" ]; then
-    timeout 75 ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \
-      "\$BACKEND_FORENSICS_SCRIPT --incident-id=\$incident_id" \
+    timeout 75 ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \\
+      "\$BACKEND_FORENSICS_SCRIPT --incident-id=\$incident_id" \\
       > "\$out_dir/node13_capture_path.log" 2>&1 || true
   else
-    printf 'backend forensic script missing: %s\\n' "\$BACKEND_FORENSICS_SCRIPT" \
+    printf 'backend forensic script missing: %s\\n' "\$BACKEND_FORENSICS_SCRIPT" \\
       > "\$out_dir/node13_capture_path.log"
   fi
 
@@ -750,6 +754,8 @@ sub parse_args {
         elsif ($_ eq '--enable-thinking') { $OPT{disable_thinking} = 0; $OPT{default_chat_template_kwargs} = '{"enable_thinking": true}' }
         elsif ($_ eq '--no-language-model-only') { $OPT{language_model_only} = 0 }
         elsif ($_ eq '--language-model-only') { $OPT{language_model_only} = 1 }
+        elsif ($_ eq '--enable-prompt-tokens-details') { $OPT{enable_prompt_tokens_details} = 1 }
+        elsif ($_ eq '--no-enable-prompt-tokens-details') { $OPT{enable_prompt_tokens_details} = 0 }
         elsif ($_ eq '--rewrite-model-name') { $OPT{rewrite_model_name} = 1 }
         elsif ($_ eq '--no-rewrite-model-name') { $OPT{rewrite_model_name} = 0 }
         elsif ($_ eq '--with-cleanup') { $OPT{with_cleanup} = 1 }
@@ -801,10 +807,11 @@ Backend options (defaults):
   --max-num-seqs=$OPT{max_num_seqs}
   --max-num-batched-tokens=$OPT{max_num_batched_tokens}
   --reasoning-parser=qwen3
-  --tool-call-parser=qwen3_coder
+  --tool-call-parser=qwen3_xml
   --enable-thinking / --disable-thinking
   --default-chat-template-kwargs='{"enable_thinking": false}'
   --no-language-model-only (enable multimodal)
+  --enable-prompt-tokens-details (return usage.prompt_tokens_details.cached_tokens)
   --vllm-allow-long-max-model-len (override model's max_position_embeddings)
   --skip-backend (skip backend restart in apply-all)
   --with-cleanup (run master-cleanup before apply-all)

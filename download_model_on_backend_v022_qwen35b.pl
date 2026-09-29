@@ -1,4 +1,6 @@
 #!/usr/bin/env perl
+# UTILITY: preset downloader for historical, comparison, and current models.
+# It is not the production server entry point; deployment is managed separately.
 use strict;
 use FindBin;
 use warnings;
@@ -12,15 +14,15 @@ use JSON::PP qw(decode_json encode_json);
 # Run this script on the MASTER node.
 #
 # Purpose:
-#   SSH into the backend vLLM node, usually node09, and download a Hugging Face
+#   SSH into the backend vLLM node, usually node13, and download a Hugging Face
 #   model snapshot into the current vLLM model directory:
 #
 #       /local_opt/vllm-models
 #
-# Current lab stack:
-#   Backend node       : node09
-#   vLLM install root  : /local_opt/vllm-install
-#   vLLM Python        : /local_opt/vllm-install/.vllm/bin/python
+# Current cluster195 stack:
+#   Backend node       : node13
+#   vLLM install root  : /local_opt/vllm-install-qwen38-v0271
+#   vLLM Python        : /local_opt/vllm-install-qwen38-v0271/.vllm/bin/python
 #   Model root         : /local_opt/vllm-models
 #   Manager script     : manage_lab_vllm_from_master_v022_qwen35b.pl
 #   Backend deployer   : deploy_vllm4dgx_v022_qwen35b.pl
@@ -68,7 +70,7 @@ my %PRESETS = (
         reasoning_parser          => 'qwen3',
         gpu_memory_utilization    => '0.90',
         max_model_len             => '262144',
-        max_num_seqs              => '10',
+        max_num_seqs           => '20',
         max_num_batched_tokens    => '32768',
         disable_thinking          => 1,
         note                      => 'Qwen3.8 27B AutoRound INT4 for the native vLLM 0.27.1 GB10 profile; preserves mel_llm for Hermes.',
@@ -318,9 +320,9 @@ my %OPT = (
     use_remote_hf_token_env   => 1,
 
     # Current vLLM installation
-    backend_python            => '/local_opt/vllm-install/.vllm/bin/python',
-    backend_venv              => '/local_opt/vllm-install/.vllm',
-    vllm_src_root             => '/local_opt/vllm-install/vllm',
+    backend_python            => '/local_opt/vllm-install-qwen38-v0271/.vllm/bin/python',
+    backend_venv              => '/local_opt/vllm-install-qwen38-v0271/.vllm',
+    vllm_src_root             => '/local_opt/vllm-install-qwen38-v0271/vllm',
 
     # Current manager/deployment defaults
     manager_script            => 'manage_lab_vllm_from_master_v022_qwen35b.pl',
@@ -1186,7 +1188,7 @@ HF token options:
       Local environment variable name to read when using --use-local-hf-token-env.
 
 Current vLLM options:
-  --backend-python=/local_opt/vllm-install/.vllm/bin/python
+  --backend-python=/local_opt/vllm-install-qwen38-v0271/.vllm/bin/python
   --default-root=/local_opt/vllm-models
 
 Deploy-command options:

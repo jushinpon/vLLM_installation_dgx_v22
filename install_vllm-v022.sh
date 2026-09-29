@@ -1,6 +1,6 @@
 #!/bin/bash
 ################################################################################
-# One-click vLLM v0.22.0 installer for NVIDIA DGX Spark / GB10
+# Legacy vLLM v0.22.0 installer for NVIDIA DGX Spark / GB10
 #
 # Target:
 #   - DGX OS / NVIDIA GB10 / Blackwell / aarch64
@@ -64,7 +64,7 @@ Usage: $0 [OPTIONS]
 Options:
   --install-dir DIR       Install directory (default: /local_opt/vllm-install)
   --vllm-version VER      vLLM version/tag (default: v0.22.0)
-  --profile NAME          standard or qwen38-v0271 (default: standard)
+  --profile NAME          standard (legacy) or qwen38-v0271 (default: standard)
   --python-version VER    Python version for venv (default: 3.12)
   --force-clean           Remove existing install dir before starting
   --model-id ID           HuggingFace model ID
@@ -103,7 +103,7 @@ configure_profile() {
       MODEL_ID="Frozenlock/Qwen3.8-27B-int4-AutoRound"
       SERVED_MODEL_NAME="mel_llm"
       MAX_MODEL_LEN="262144"
-      MAX_NUM_SEQS="10"
+      MAX_NUM_SEQS="20"
       MAX_NUM_BATCHED_TOKENS="32768"
       GPU_MEMORY_UTILIZATION="0.90"
       RESOLVE_VLLM_DEPS="1"

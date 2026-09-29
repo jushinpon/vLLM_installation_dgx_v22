@@ -1,11 +1,11 @@
 #!/bin/bash
 ################################################################################
-# Smoke test for vLLM v0.22.0-based DGX Spark / GB10 installation
+# Smoke test for the current Qwen3.8 vLLM service on DGX Spark / GB10
 # Target installer:
 #   install_vllm-v022.sh
 #
 # Target model:
-#   Qwen/Qwen3.6-27B-FP8
+#   /local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4
 #
 # Purpose:
 #   - Verify the current vLLM environment created by install_vllm-v022.sh.
@@ -35,30 +35,39 @@ set -o pipefail
 # Defaults for the current working installation
 ################################################################################
 
-INSTALL_DIR="/local_opt/vllm-install"
-MODEL_ID="Qwen/Qwen3.6-27B-FP8"
-SERVED_MODEL_NAME="qwen3.6-27b-fp8"
+INSTALL_DIR="/local_opt/vllm-install-qwen38-v0271"
+MODEL_ID="/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4"
+SERVED_MODEL_NAME="mel_llm"
 HOST="127.0.0.1"
 PORT="8000"
 DTYPE="auto"
-GPU_MEMORY_UTIL="0.70"
+GPU_MEMORY_UTIL="0.75"
 MAX_WAIT_SEC="2400"
-MAX_MODEL_LEN="32768"
-MAX_NUM_SEQS="16"
-MAX_NUM_BATCHED_TOKENS="8192"
+MAX_MODEL_LEN="262144"
+MAX_NUM_SEQS="20"
+MAX_NUM_BATCHED_TOKENS="16384"
 CHAT_MAX_TOKENS="256"
 CHAT_TEMPERATURE="0"
 REASONING_PARSER="qwen3"
-TOOL_CALL_PARSER="qwen3_coder"
+TOOL_CALL_PARSER="qwen3_xml"
 EXPECTED_TRITON_VERSION="3.7.1"
+KV_CACHE_DTYPE="fp8"
+LIMIT_MM_PER_PROMPT='{"image":12}'
+DEFAULT_CHAT_TEMPLATE_KWARGS='{"enable_thinking":false}'
+SPECULATIVE_CONFIG='{"draft_sample_method":"probabilistic","model":"/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2","num_speculative_tokens":7,"method":"dflash"}'
+PERFORMANCE_MODE="throughput"
+OPTIMIZATION_LEVEL="2"
+ENABLE_PROMPT_TOKENS_DETAILS=1
+MOE_BACKEND="triton"
 
 TEST_CHAT=0
 KEEP_SERVER=0
 ENFORCE_EAGER=0
 STOP_EXISTING=0
+FORCE_STOP_EXISTING=0
 NO_START=0
 TRUST_REMOTE_CODE=1
-LANGUAGE_MODEL_ONLY=1
+LANGUAGE_MODEL_ONLY=0
 ENABLE_AUTO_TOOL_CHOICE=1
 ENABLE_PREFIX_CACHING=1
 ENABLE_CHUNKED_PREFILL=1
@@ -81,31 +90,32 @@ show_help() {
 Usage:
   bash $0 [options]
 
-Defaults match the current install_vllm-v022.sh setup:
-  Install dir        : /local_opt/vllm-install
-  Model ID           : Qwen/Qwen3.6-27B-FP8
-  Served model name  : qwen3.5-35b-a3b
+Defaults match the current Qwen3.8/DFlash2 smoke-test profile:
+  Run this script on node13; it intentionally does not SSH to the backend:
+  Install dir        : /local_opt/vllm-install-qwen38-v0271
+  Model ID           : /local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4
+  Served model name  : mel_llm
   Host               : 127.0.0.1
   Port               : 8000
-  Max model len      : 32768
-  Max num seqs       : 16
-  Max batched tokens : 32768
-  GPU memory util    : 0.90
+  Max model len      : 262144
+  Max num seqs       : 20
+  Max batched tokens : 16384
+  GPU memory util    : 0.75
   Reasoning parser   : qwen3
   Tool parser        : qwen3_xml
 
 Common options:
   --install-dir DIR
       vLLM install directory.
-      Default: /local_opt/vllm-install
+      Default: /local_opt/vllm-install-qwen38-v0271
 
   --model MODEL_ID_OR_PATH
       Hugging Face model ID or local model path.
-      Default: Qwen/Qwen3.6-27B-FP8
+      Default: /local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4
 
   --served-model-name NAME
       Model name exposed by vLLM API.
-      Default: qwen3.5-35b-a3b
+      Default: mel_llm
 
   --host HOST
       API server host.
@@ -122,6 +132,7 @@ Common options:
       Keep the vLLM server running after the smoke test succeeds.
 
   --stop-existing
+  --force-stop-existing
       Stop existing vLLM processes before starting a new server.
       Recommended when changing server settings.
 
@@ -131,19 +142,19 @@ Common options:
 Model/server options:
   --gpu-memory-util FLOAT
       vLLM GPU memory utilization.
-      Default: 0.90
+      Default: 0.75
 
   --max-model-len INT
       Maximum context length.
-      Default: 32768
+      Default: 262144
 
   --max-num-seqs INT
       Maximum concurrent sequences.
-      Default: 16
+      Default: 20
 
   --max-num-batched-tokens INT
       Maximum batched tokens.
-      Default: 32768
+      Default: 16384
 
   --dtype DTYPE
       vLLM dtype.
@@ -246,11 +257,13 @@ while [[ $# -gt 0 ]]; do
     --keep-server) KEEP_SERVER=1; shift ;;
     --enforce-eager) ENFORCE_EAGER=1; shift ;;
     --stop-existing) STOP_EXISTING=1; shift ;;
+    --force-stop-existing) FORCE_STOP_EXISTING=1; shift ;;
     --no-start) NO_START=1; shift ;;
     --no-reasoning-parser) REASONING_PARSER=""; shift ;;
     --no-auto-tool-choice) ENABLE_AUTO_TOOL_CHOICE=0; shift ;;
     --no-prefix-caching) ENABLE_PREFIX_CACHING=0; shift ;;
     --no-chunked-prefill) ENABLE_CHUNKED_PREFILL=0; shift ;;
+    --language-model-only) LANGUAGE_MODEL_ONLY=1; shift ;;
     --no-language-model-only) LANGUAGE_MODEL_ONLY=0; shift ;;
     --no-trust-remote-code) TRUST_REMOTE_CODE=0; shift ;;
     --no-require-model-match) REQUIRE_MODEL_MATCH=0; shift ;;
@@ -320,7 +333,7 @@ activate_install() {
 
 print_config() {
   echo "========================================"
-  echo "vLLM v022 / Qwen3.6-27B-FP8 Smoke Test"
+  echo "Qwen3.8 NVFP4 / DFlash2 Smoke Test"
   echo "========================================"
   echo "[INFO] Install dir        : $INSTALL_DIR"
   echo "[INFO] Model ID           : $MODEL_ID"
@@ -345,6 +358,14 @@ verify_python_environment() {
   log_info "Verifying Python environment..."
 
   if ! EXPECTED_TRITON_VERSION="$EXPECTED_TRITON_VERSION" python - <<'PY'
+KV_CACHE_DTYPE="fp8"
+LIMIT_MM_PER_PROMPT='{"image":12}'
+DEFAULT_CHAT_TEMPLATE_KWARGS='{"enable_thinking":false}'
+SPECULATIVE_CONFIG='{"draft_sample_method":"probabilistic","model":"/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2","num_speculative_tokens":7,"method":"dflash"}'
+PERFORMANCE_MODE="throughput"
+OPTIMIZATION_LEVEL="2"
+ENABLE_PROMPT_TOKENS_DETAILS=1
+MOE_BACKEND="triton"
 import inspect
 import os
 import torch
@@ -393,14 +414,14 @@ check_native_extension() {
     | grep -i cutlass_moe_mm_sm100 \
     | grep " T " >/dev/null || {
       log_warn "cutlass_moe_mm_sm100 not found - using triton MoE backend in _C.abi3.so"
-      # exit 1 (non-fatal with triton MoE backend)
+      # Native symbol is optional when the Triton MoE backend is active.
     }
 
   log_warn "GB10 MoE check: triton backend in use (symbol check bypassed)"
 }
 
 get_models_response() {
-  curl -sS "http://${HOST}:${PORT}/v1/models" \
+  curl -fsS "http://${HOST}:${PORT}/v1/models" \
     --connect-timeout 2 \
     --max-time 10 \
     >/tmp/vllm_models_resp.json 2>/tmp/vllm_models_curl.err
@@ -434,7 +455,7 @@ wait_for_server() {
       if [[ -n "$SERVER_LOG" && -f "$SERVER_LOG" ]]; then
         tail -n 160 "$SERVER_LOG"
       fi
-      # exit 1 (non-fatal with triton MoE backend)
+      exit 1
     fi
 
     if get_models_response; then
@@ -442,7 +463,7 @@ wait_for_server() {
       check_model_match || {
         log_fail "Existing/responding server does not expose expected model: $SERVED_MODEL_NAME"
         cat /tmp/vllm_models_resp.json || true
-        # exit 1 (non-fatal with triton MoE backend)
+        exit 1
       }
       break
     fi
@@ -455,7 +476,7 @@ wait_for_server() {
       if [[ -n "$SERVER_LOG" && -f "$SERVER_LOG" ]]; then
         tail -n 160 "$SERVER_LOG"
       fi
-      # exit 1 (non-fatal with triton MoE backend)
+      exit 1
     fi
 
     sleep 5
@@ -468,7 +489,7 @@ start_server_if_needed() {
     check_model_match || {
       log_fail "Existing server responds, but model ID does not match: $SERVED_MODEL_NAME"
       cat /tmp/vllm_models_resp.json || true
-      # exit 1 (non-fatal with triton MoE backend)
+      exit 1
     }
     return 0
   fi
@@ -478,7 +499,7 @@ start_server_if_needed() {
     if [[ -s /tmp/vllm_models_curl.err ]]; then
       cat /tmp/vllm_models_curl.err
     fi
-    # exit 1 (non-fatal with triton MoE backend)
+    exit 1
   fi
 
   SERVER_LOG="$(mktemp /tmp/vllm_v022_qwen35_smoke.XXXXXX.log)"
@@ -514,6 +535,10 @@ start_server_if_needed() {
     EXTRA_ARGS+=(--enable-auto-tool-choice --tool-call-parser "$TOOL_CALL_PARSER")
   fi
 
+  if [[ "$ENABLE_PROMPT_TOKENS_DETAILS" -eq 1 ]]; then
+    EXTRA_ARGS+=(--enable-prompt-tokens-details)
+  fi
+
   python -m vllm.entrypoints.openai.api_server \
     --model "$MODEL_ID" \
     --served-model-name "$SERVED_MODEL_NAME" \
@@ -525,10 +550,23 @@ start_server_if_needed() {
     --max-model-len "$MAX_MODEL_LEN" \
     --max-num-seqs "$MAX_NUM_SEQS" \
     --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS" \
+    --kv-cache-dtype "$KV_CACHE_DTYPE" \
+    --limit-mm-per-prompt "$LIMIT_MM_PER_PROMPT" \
+    --default-chat-template-kwargs "$DEFAULT_CHAT_TEMPLATE_KWARGS" \
+    --moe-backend "$MOE_BACKEND" \
+    --speculative-config "$SPECULATIVE_CONFIG" \
+    --performance-mode "$PERFORMANCE_MODE" \
+    --optimization-level "$OPTIMIZATION_LEVEL" \
     "${EXTRA_ARGS[@]}" \
     >"$SERVER_LOG" 2>&1 &
 
   SERVER_PID=$!
+  sleep 1
+  if ! kill -0 "$SERVER_PID" >/dev/null 2>&1; then
+    log_fail "Server exited during startup"
+    tail -n 160 "$SERVER_LOG" || true
+    exit 1
+  fi
   log_info "Started server PID: $SERVER_PID"
   wait_for_server
 }
@@ -555,13 +593,13 @@ test_chat_completion() {
 }
 EOF_JSON
 
-  curl -sS \
+  curl -fsS \
     -H "Content-Type: application/json" \
     -d @/tmp/vllm_chat_req.json \
     "http://${HOST}:${PORT}/v1/chat/completions" \
     >/tmp/vllm_chat_resp.json || {
       log_fail "Chat test curl failed"
-      # exit 1 (non-fatal with triton MoE backend)
+      exit 1
     }
 
   cat /tmp/vllm_chat_resp.json
@@ -588,6 +626,13 @@ content = msg.get("content")
 reasoning = msg.get("reasoning")
 finish_reason = choices[0].get("finish_reason")
 
+if not isinstance(content, str) or not content.strip():
+    print("Chat response contained no non-empty content", file=sys.stderr)
+    sys.exit(1)
+if not finish_reason:
+    print("Chat response omitted finish_reason", file=sys.stderr)
+    sys.exit(1)
+
 print("content:", repr(content))
 print("has reasoning:", reasoning is not None)
 print("finish_reason:", finish_reason)
@@ -603,6 +648,11 @@ PY
 ################################################################################
 # Main workflow
 ################################################################################
+
+if [[ "$STOP_EXISTING" -eq 1 && "$FORCE_STOP_EXISTING" -ne 1 ]]; then
+  log_fail "--stop-existing requires --force-stop-existing to confirm destructive cleanup"
+  exit 2
+fi
 
 if [[ "$STOP_EXISTING" -eq 1 ]]; then
   stop_existing_vllm

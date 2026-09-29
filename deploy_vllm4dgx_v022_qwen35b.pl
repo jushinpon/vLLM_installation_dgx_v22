@@ -18,40 +18,40 @@ use Fcntl qw(:flock);
 # Purpose:
 #   Manage the current native vLLM installation created by install_vllm-v022.sh.
 #   This script generates a vLLM launcher, starts/stops the backend, and checks
-#   readiness. It now supports multimodal settings for Qwen3.6 A3B, including:
+#   readiness. It now supports multimodal settings for Qwen3.8 NVFP4, including:
 #
 #     --no-language-model-only
-#     --limit-mm-per-prompt='{"image":4}'
+#     --limit-mm-per-prompt='{"image":12}'
 #
 # Important:
-#   - The default enables multimodal input with at most four images per prompt.
+#   - The default enables multimodal input with up to twelve images per prompt.
 #   - Use --language-model-only when a text-only deployment is preferred.
-#   - For Qwen3.6 fast non-thinking mode, use --disable-thinking.
+#   - For Qwen3.8 DFlash2 non-thinking mode, use --disable-thinking.
 # =============================================================================
 
 my %OPT = (
     action                       => shift(@ARGV) || 'status',
 
-    install_root                 => '/local_opt/vllm-install',
-    venv_root                    => '/local_opt/vllm-install/.vllm',
-    vllm_src_root                => '/local_opt/vllm-install/vllm',
+    install_root                 => '/local_opt/vllm-install-qwen38-v0271',
+    venv_root                    => '/local_opt/vllm-install-qwen38-v0271/.vllm',
+    vllm_src_root                => '/local_opt/vllm-install-qwen38-v0271/vllm',
 
-    stack_root                   => '/local_opt/vllm-service-qwen35b',
-    cache_root                   => '/local_opt/vllm-cache',
-    hf_root                      => '/local_opt/hf-vllm',
-    tmp_root                     => '/local_opt/tmp-vllm',
+    stack_root                   => '/local_opt/vllm-service-qwen38-v0271',
+    cache_root                   => '/local_opt/vllm-cache-qwen38-v0271',
+    hf_root                      => '/local_opt/hf-vllm-qwen38-v0271',
+    tmp_root                     => '/local_opt/tmp-vllm-qwen38-v0271',
 
-    model_id                     => 'Qwen/Qwen3.6-27B-FP8',
+    model_id                     => '/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4',
     served_model_name            => 'mel_llm',
 
     host                         => '0.0.0.0',
     port                         => 8000,
     dtype                        => 'auto',
     tensor_parallel_size         => 1,
-    gpu_memory_utilization       => '0.85',
+    gpu_memory_utilization       => '0.75',
     max_model_len                => '262144',
-    max_num_batched_tokens       => '32768',
-    max_num_seqs                 => '10',
+    max_num_batched_tokens       => '16384',
+    max_num_seqs           => '20',
 
     kv_cache_dtype               => '',
     device                       => '',
@@ -62,26 +62,27 @@ my %OPT = (
 
     # New multimodal controls.
     language_model_only          => 0,
-    limit_mm_per_prompt          => '{"image":4}',
+    limit_mm_per_prompt          => '{"image":12}',
     media_io_kwargs              => '',
     allowed_local_media_path     => '',
     allowed_media_domains        => '',
     mm_processor_kwargs          => '',
 
     reasoning_parser             => 'qwen3',
-    tool_call_parser             => 'qwen3_coder',
-    expected_triton_version      => '3.6.0',
+    tool_call_parser             => 'qwen3_xml',
+    expected_triton_version      => '3.7.1',
     enable_auto_tool_choice      => 1,
     enable_prefix_caching        => 1,
     enable_chunked_prefill       => 1,
+    enable_prompt_tokens_details => 1,
     trust_remote_code            => 1,
     force_eager                  => 0,
     num_scheduler_steps          => '',
     speculative_config           => '',
-    speculative_method           => 'qwen3_next_mtp',
-    num_speculative_tokens       => '3',
-    speculative_model           => '',
-    draft_sample_method         => '',
+    speculative_method           => 'dflash',
+    num_speculative_tokens       => '7',
+    speculative_model           => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
+    draft_sample_method         => 'probabilistic',
     performance_mode             => 'throughput',
     optimization_level           => '2',
 
@@ -211,6 +212,8 @@ sub parse_args {
         elsif ($arg eq '--no-auto-tool-choice') { $opt->{enable_auto_tool_choice} = 0; }
         elsif ($arg eq '--no-prefix-caching') { $opt->{enable_prefix_caching} = 0; }
         elsif ($arg eq '--no-chunked-prefill') { $opt->{enable_chunked_prefill} = 0; }
+        elsif ($arg eq '--enable-prompt-tokens-details') { $opt->{enable_prompt_tokens_details} = 1; }
+        elsif ($arg eq '--no-enable-prompt-tokens-details') { $opt->{enable_prompt_tokens_details} = 0; }
         elsif ($arg eq '--no-language-model-only') { $opt->{language_model_only} = 0; }
         elsif ($arg eq '--language-model-only') { $opt->{language_model_only} = 1; }
         elsif ($arg eq '--no-smoke-test-chat') { $opt->{smoke_test_chat} = 0; }
@@ -317,8 +320,8 @@ Important multimodal options:
   --no-language-model-only
       Do not pass --language-model-only. Required for image/video/audio input.
 
-  --limit-mm-per-prompt='{"image":4}'
-      Allow and limit multimodal inputs per prompt. For example image=1.
+  --limit-mm-per-prompt='{"image":12}'
+      Allow and limit multimodal inputs per prompt. The production limit is twelve images.
 
   --allowed-local-media-path=/local_opt/vllm-media
   --allowed-media-domains=example.com,example.org
@@ -330,31 +333,31 @@ Important OpenClaw/Hermes speed option:
       Adds --default-chat-template-kwargs '{"enable_thinking": false}'
 
 Examples:
-  Text-only Qwen3.6 A3B FP8:
+  Conservative text-only Qwen3.8 NVFP4:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+      --model-id=/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4 \
       --served-model-name=mel_llm \
       --gpu-memory-utilization=0.70 \
       --max-model-len=32768 \
       --max-num-seqs=16 \
       --max-num-batched-tokens=8192 \
-      --tool-call-parser=qwen3_coder \
+      --tool-call-parser=qwen3_xml \
       --reasoning-parser=qwen3 \
       --disable-thinking
 
-  Multimodal Qwen3.6 A3B FP8 with one image allowed:
+  Multimodal Qwen3.8 NVFP4:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
+      --model-id=/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4 \
       --served-model-name=mel_llm \
-      --gpu-memory-utilization=0.70 \
-      --max-model-len=65536 \
-      --max-num-seqs=8 \
-      --max-num-batched-tokens=8192 \
-      --tool-call-parser=qwen3_coder \
+      --gpu-memory-utilization=0.75 \
+      --max-model-len=262144 \
+      --max-num-seqs=10 \
+      --max-num-batched-tokens=16384 \
+      --tool-call-parser=qwen3_xml \
       --reasoning-parser=qwen3 \
       --disable-thinking \
       --no-language-model-only \
-      --limit-mm-per-prompt='{"image":4}'
+      --limit-mm-per-prompt='{"image":12}'
 USAGE
 }
 
@@ -477,6 +480,7 @@ sub derive_server_plan {
         enable_auto_tool_choice      => $OPT{enable_auto_tool_choice} ? JSON::PP::true : JSON::PP::false,
         enable_prefix_caching        => $OPT{enable_prefix_caching} ? JSON::PP::true : JSON::PP::false,
         enable_chunked_prefill       => $OPT{enable_chunked_prefill} ? JSON::PP::true : JSON::PP::false,
+        enable_prompt_tokens_details => $OPT{enable_prompt_tokens_details} ? JSON::PP::true : JSON::PP::false,
         reasoning_parser             => $OPT{reasoning_parser} || '',
         tool_call_parser             => $OPT{tool_call_parser} || '',
         hostname                     => $HOSTNAME,
@@ -606,6 +610,7 @@ SCRIPT
     $script .= qq{CMD+=(--language-model-only)\n} if $cfg->{language_model_only};
     $script .= qq{CMD+=(--enable-prefix-caching)\n} if $cfg->{enable_prefix_caching};
     $script .= qq{CMD+=(--enable-chunked-prefill)\n} if $cfg->{enable_chunked_prefill};
+    $script .= qq{CMD+=(--enable-prompt-tokens-details)\n} if $cfg->{enable_prompt_tokens_details};
     $script .= qq{CMD+=(--moe-backend triton)\n};
     $script .= qq{CMD+=(--num-scheduler-steps } . shell_quote($cfg->{num_scheduler_steps}) . qq{)\n} if $cfg->{num_scheduler_steps};
     $script .= qq{CMD+=(--speculative-config } . shell_quote($cfg->{speculative_config}) . qq{)\n} if $cfg->{speculative_config};
@@ -738,7 +743,7 @@ sub prune_archived_server_logs {
 sub stop_existing_vllm {
     system('bash', '-lc', q{pkill -f "vllm.entrypoints.openai.api_server" >/dev/null 2>&1 || true});
     system('bash', '-lc', q{pkill -f "VLLM::EngineCore" >/dev/null 2>&1 || true});
-    system('bash', '-lc', q{pkill -f "/local_opt/vllm-install/.vllm/bin/python" >/dev/null 2>&1 || true});
+    system('bash', '-lc', q{pkill -f "/local_opt/vllm-install-qwen38-v0271/.vllm/bin/python" >/dev/null 2>&1 || true});
     sleep 3;
 }
 

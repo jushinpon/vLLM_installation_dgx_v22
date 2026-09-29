@@ -4,7 +4,7 @@ set -euo pipefail
 # Capture state at the moment the watchdog detects a vLLM failure.  Do not add
 # request bodies, Authorization headers, or other credentials to this bundle.
 
-HOST_ROOT="/local_opt/vllm-service-qwen35b/hosts/$(hostname)"
+HOST_ROOT="/local_opt/vllm-service-qwen38-v0271/hosts/$(hostname)"
 FORENSICS_ROOT="$HOST_ROOT/forensics"
 LOG_FILE="$HOST_ROOT/logs/vllm_server.log"
 INCIDENT_ID=""
