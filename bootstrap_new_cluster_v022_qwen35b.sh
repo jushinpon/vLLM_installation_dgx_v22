@@ -16,7 +16,7 @@ GPU_MEMORY_UTILIZATION="0.85"
 MAX_MODEL_LEN="131072"
 MAX_NUM_SEQS="20"
 MAX_NUM_BATCHED_TOKENS="16384"
-RPM_LIMIT="120"
+RPM_LIMIT="60"
 MAX_CONCURRENT_PER_STUDENT="6"
 CLIENT_TIMEOUT="300"
 DOWNSTREAM_TIMEOUT="600"
@@ -53,7 +53,7 @@ Common options:
   --max-model-len N            vLLM max context length (default: 131072)
   --max-num-seqs N             vLLM max concurrent sequences (default: 20)
   --max-num-batched-tokens N   vLLM max batched tokens (default: 16384)
-  --rpm-limit N                Gateway per-token request limit (default: 120)
+  --rpm-limit N                Gateway per-token request limit (default: 60)
   --max-concurrent N           Gateway per-student concurrency (default: 6)
   --with-cleanup               Run master cleanup before deployment
   --no-watchdog                Do not install watchdog

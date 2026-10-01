@@ -1,6 +1,6 @@
 # DGX Spark Qwen3.8 vLLM/DFlash2 - cluster195 Deployment
 
-> **Production source of truth (2026-09-27):** cluster195 runs Qwen3.8-27B-NVFP4 with the DFlash2 wrapper `deploy_qwen38_27b_dflash2.sh`. The active profile is `gpu-memory-utilization=0.75`, `max-num-batched-tokens=16384`, and `limit-mm-per-prompt='{"image":12}'`. Older Qwen3.6/MTP values below are legacy documentation only; do not use them for production restarts.
+> **Production source of truth (2026-10-01):** cluster195 runs Qwen3.8-27B-NVFP4 with the DFlash2 wrapper `deploy_qwen38_27b_dflash2.sh`. The active profile is documented below. Older Qwen3.6/MTP values are legacy documentation only; do not use them for production restarts.
 
 Current cluster195 inference serving system for **DGX Spark (GB10, aarch64)**.
 Model: `nvidia-Qwen3.8-27B-NVFP4` (production NVFP4 model; FP8 is used for the KV cache).
@@ -10,6 +10,56 @@ Compatibility note: operational script and watchdog filenames still contain
 The generic manager defaults now match the Qwen3.8 NVFP4 + DFlash2 production profile; use the DFlash wrapper for explicit deployments.
 **Nginx gateway** on master `:9000` — auth, rate limiting, proxying.
 Backend vLLM on `node13:8000`.
+
+## Production Profile
+
+| Setting | Value |
+|---|---:|
+| `gpu-memory-utilization` | `0.85` |
+| `max-model-len` | `262144` |
+| `max-num-batched-tokens` | `32768` |
+| `max-num-seqs` | `10` |
+| `kv-cache-dtype` | `fp8` |
+| multimodal image limit | `4` per prompt |
+| speculative decoding | DFlash2, `7` tokens, probabilistic sampling |
+| performance profile | `throughput`, optimization level `2` |
+| thinking | disabled by default |
+| gateway concurrency | `1` active request per student, up to 10 students |
+| gateway rate limit | `60` requests/minute per student |
+
+The DFlash wrapper and generic manager defaults intentionally match this table. The
+watchdog installer receives the same explicit arguments, so an automatic restart
+does not silently return to older memory, batching, concurrency, or image limits.
+
+### Verified Throughput
+
+Measurements on node13 with the production profile:
+
+- `45.56` output tokens/s using the protocol from `gitcommit90/qwen38-27b-dgx-spark`
+  (published reference: `44.46` output tokens/s).
+- `58.16` output tokens/s using the pangoleen decode-only protocol.
+- `188.16` aggregate output tokens/s with 10 concurrent users and
+  `max-num-batched-tokens=32768`; the same run with `16384` measured `140.17`.
+
+Results depend on prompt length, output length, cache state, and request mix. Use the
+matching benchmark protocol when comparing numbers.
+
+### Watchdog and Reboots
+
+`/usr/local/sbin/vllm_qwen35b_watchdog.sh` runs every two minutes. It performs a real
+`/v1/chat/completions` probe and restarts the backend after three consecutive failures,
+with a 15-minute restart cooldown and a maintenance marker during planned model loads.
+If node13 itself is unreachable, the watchdog records the failure but cannot restart a
+host that does not accept SSH. After a manual host reboot, run:
+
+```bash
+cd /home/vLLM_installation_dgx_v22
+bash ./deploy_qwen38_27b_dflash2.sh --deploy
+/usr/local/sbin/vllm_qwen35b_watchdog.sh
+```
+
+The final command should append `PROBE_OK` to
+`/var/log/vllm_qwen35b_watchdog.log`.
 
 ---
 
