@@ -15,7 +15,7 @@ Backend vLLM on `node13:8000`.
 
 | Setting | Value |
 |---|---:|
-| `gpu-memory-utilization` | `0.85` |
+| `gpu-memory-utilization` | `0.75` |
 | `max-model-len` | `262144` |
 | `max-num-batched-tokens` | `32768` |
 | `max-num-seqs` | `10` |
@@ -30,6 +30,11 @@ Backend vLLM on `node13:8000`.
 The DFlash wrapper and generic manager defaults intentionally match this table. The
 watchdog installer receives the same explicit arguments, so an automatic restart
 does not silently return to older memory, batching, concurrency, or image limits.
+
+The `0.75` memory target leaves operating-system headroom on the GB10 unified-memory
+platform. A previous `0.85` deployment left only about 11 GiB available, used swap,
+and logged NVIDIA `NV_ERR_NO_MEMORY` immediately before a host-wide userspace stall.
+Do not increase this value to `0.90` without first reducing other memory consumers.
 
 ### Verified Throughput
 
