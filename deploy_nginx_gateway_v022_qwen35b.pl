@@ -87,16 +87,53 @@ sub generate_nginx_config {
     my $client_to    = $cfg->{client_timeout} || 60;
     my $down_to      = $cfg->{downstream_timeout} || 600;
     my $hard_to      = $cfg->{request_hard_timeout} || 900;
+    my $default_concurrent = $cfg->{max_concurrent_per_student} || 2;
+    $default_concurrent = 2 unless $default_concurrent =~ /^\d+$/ && $default_concurrent > 0;
 
     my $backend = "http://$backend_host:$backend_port";
 
     my $map_entries = '';
+    my %student_limits;
     for my $sid (sort keys %$students) {
         my $s = $students->{$sid};
         next unless $s->{enabled};
         my $token = $s->{token};
         next unless $token;
         $map_entries .= "    \"Bearer $token\" \"$sid\";\n";
+
+        my $limit = $s->{max_concurrent};
+        $limit = $default_concurrent unless defined $limit && $limit =~ /^\d+$/ && $limit > 0;
+        $student_limits{$limit}{$sid} = 1;
+    }
+
+    # nginx 1.14 cannot use a variable as the numeric limit_conn value.  Build
+    # one zone per distinct limit and route each student into exactly one zone
+    # with an empty key in all other zones.  This gives us default=2 with
+    # per-student overrides such as dsh/hermes=6.
+    my $concurrency_maps = '';
+    my $concurrency_zones = '';
+    my $concurrency_directives = '';
+    for my $limit (sort { $a <=> $b } keys %student_limits) {
+        my $key = "gw_conn_key_$limit";
+        my $zone = "gw_conc_$limit";
+        my $default_value = ($limit == $default_concurrent) ? '$gw_student_id' : '""';
+        $concurrency_maps .= "map \$gw_student_id \$${key} {\n";
+        $concurrency_maps .= "    default $default_value;\n";
+        for my $sid (sort keys %{ $student_limits{$limit} }) {
+            next if $limit == $default_concurrent;
+            $concurrency_maps .= "    \"$sid\" \$gw_student_id;\n";
+        }
+        if ($limit == $default_concurrent) {
+            for my $other_limit (keys %student_limits) {
+                next if $other_limit == $default_concurrent;
+                for my $sid (sort keys %{ $student_limits{$other_limit} }) {
+                    $concurrency_maps .= "    \"$sid\" \"\";\n";
+                }
+            }
+        }
+        $concurrency_maps .= "}\n\n";
+        $concurrency_zones .= "limit_conn_zone \$${key} zone=${zone}:10m;\n";
+        $concurrency_directives .= "        limit_conn $zone $limit;\n";
     }
 
     my $conf = <<"NGINX_CONF";
@@ -118,6 +155,9 @@ map \$http_authorization \$gw_student_id {
     default     "";
 $map_entries
 }
+
+$concurrency_zones
+$concurrency_maps
 
 server {
     listen $gw_port;
@@ -161,6 +201,7 @@ server {
 
         limit_req zone=gw_rl burst=20 nodelay;
         limit_req_status 429;
+$concurrency_directives        limit_conn_status 429;
 
         proxy_pass $backend;
         proxy_http_version 1.1;

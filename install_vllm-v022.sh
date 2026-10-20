@@ -22,6 +22,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; NC='\033[0m'
 log_info()    { echo -e "${BLUE}[INFO]${NC} $1"; }
 log_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
@@ -96,16 +98,16 @@ configure_profile() {
       # Keep this isolated from the production v0.22 runtime. v0.27.1 resolves
       # its own Python requirements after the source checkout rather than using
       # the historical v0.22 dependency pins below.
-      VLLM_VERSION="v0.27.1"
+      VLLM_VERSION="6e448d0ea9bf3d88d898b65449ca6dc2aec170ac"
       PYTORCH_VERSION="2.13.0"
       TORCHVISION_VERSION="0.28.0"
       INSTALL_TORCHAUDIO="0"
-      MODEL_ID="Frozenlock/Qwen3.8-27B-int4-AutoRound"
+      MODEL_ID="/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4"
       SERVED_MODEL_NAME="mel_llm"
-      MAX_MODEL_LEN="262144"
-      MAX_NUM_SEQS="20"
-      MAX_NUM_BATCHED_TOKENS="32768"
-      GPU_MEMORY_UTILIZATION="0.90"
+      MAX_MODEL_LEN="131072"
+      MAX_NUM_SEQS="10"
+      MAX_NUM_BATCHED_TOKENS="16384"
+      GPU_MEMORY_UTILIZATION="0.85"
       RESOLVE_VLLM_DEPS="1"
       # CUDA C++ extensions on the shared GB10 host are memory intensive. Keep
       # the production vLLM service responsive while the new runtime is built.
@@ -244,6 +246,16 @@ clone_vllm() {
   log_success "vLLM source cloned"
 }
 
+apply_qwen38_dflash2_patch() {
+  [[ "$PROFILE" == "qwen38-v0271" ]] || return 0
+  local patch_script="$SCRIPT_DIR/apply_vllm_dflash2_patch_20261020.sh"
+  [[ -x "$patch_script" ]] || {
+    log_error "Missing DFlash2 patch script: $patch_script"
+    exit 1
+  }
+  "$patch_script" --source-root "${INSTALL_DIR}/vllm"
+}
+
 clean_vllm_build_tree() {
   cd "${INSTALL_DIR}/vllm"
   rm -rf build dist .pytest_cache .setuptools-cmake-build vllm.egg-info
@@ -361,6 +373,7 @@ main() {
   install_pytorch
   install_dependencies
   clone_vllm
+  apply_qwen38_dflash2_patch
   build_vllm
   verify_installation
   create_launcher

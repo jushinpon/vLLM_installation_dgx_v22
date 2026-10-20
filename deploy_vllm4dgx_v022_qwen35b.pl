@@ -18,15 +18,15 @@ use Fcntl qw(:flock);
 # Purpose:
 #   Manage the current native vLLM installation created by install_vllm-v022.sh.
 #   This script generates a vLLM launcher, starts/stops the backend, and checks
-#   readiness. It now supports multimodal settings for Qwen3.8 NVFP4, including:
+#   readiness. It now supports multimodal settings for Qwen3.6 A3B, including:
 #
 #     --no-language-model-only
-#     --limit-mm-per-prompt='{"image":12}'
+#     --limit-mm-per-prompt='{"image":4}'
 #
 # Important:
-#   - The default enables multimodal input with up to twelve images per prompt.
+#   - The default enables multimodal input with at most four images per prompt.
 #   - Use --language-model-only when a text-only deployment is preferred.
-#   - For Qwen3.8 DFlash2 non-thinking mode, use --disable-thinking.
+#   - For Qwen3.6 fast non-thinking mode, use --disable-thinking.
 # =============================================================================
 
 my %OPT = (
@@ -36,10 +36,10 @@ my %OPT = (
     venv_root                    => '/local_opt/vllm-install-qwen38-v0271/.vllm',
     vllm_src_root                => '/local_opt/vllm-install-qwen38-v0271/vllm',
 
-    stack_root                   => '/local_opt/vllm-service-qwen38-v0271',
-    cache_root                   => '/local_opt/vllm-cache-qwen38-v0271',
-    hf_root                      => '/local_opt/hf-vllm-qwen38-v0271',
-    tmp_root                     => '/local_opt/tmp-vllm-qwen38-v0271',
+    stack_root                   => '/local_opt/vllm-service-qwen35b',
+    cache_root                   => '/local_opt/vllm-cache',
+    hf_root                      => '/local_opt/hf-vllm',
+    tmp_root                     => '/local_opt/tmp-vllm',
 
     model_id                     => '/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4',
     served_model_name            => 'mel_llm',
@@ -48,12 +48,12 @@ my %OPT = (
     port                         => 8000,
     dtype                        => 'auto',
     tensor_parallel_size         => 1,
-    gpu_memory_utilization       => '0.75',
-    max_model_len                => '262144',
+    gpu_memory_utilization       => '0.85',
+    max_model_len                => '131072',
     max_num_batched_tokens       => '16384',
-    max_num_seqs           => '20',
+    max_num_seqs                 => '10',
 
-    kv_cache_dtype               => '',
+    kv_cache_dtype               => 'fp8',
     device                       => '',
     generation_config            => '',
     chat_template_content_format => '',
@@ -62,7 +62,7 @@ my %OPT = (
 
     # New multimodal controls.
     language_model_only          => 0,
-    limit_mm_per_prompt          => '{"image":12}',
+    limit_mm_per_prompt          => '{"image":4}',
     media_io_kwargs              => '',
     allowed_local_media_path     => '',
     allowed_media_domains        => '',
@@ -70,19 +70,18 @@ my %OPT = (
 
     reasoning_parser             => 'qwen3',
     tool_call_parser             => 'qwen3_xml',
-    expected_triton_version      => '3.7.1',
     enable_auto_tool_choice      => 1,
     enable_prefix_caching        => 1,
     enable_chunked_prefill       => 1,
-    enable_prompt_tokens_details => 1,
     trust_remote_code            => 1,
     force_eager                  => 0,
     num_scheduler_steps          => '',
     speculative_config           => '',
+    # DFlash2 is validated with the vLLM 0.27.2 installation on node13.
     speculative_method           => 'dflash',
     num_speculative_tokens       => '7',
-    speculative_model           => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
-    draft_sample_method         => 'probabilistic',
+    speculative_model            => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
+    draft_sample_method           => '',
     performance_mode             => 'throughput',
     optimization_level           => '2',
 
@@ -212,8 +211,6 @@ sub parse_args {
         elsif ($arg eq '--no-auto-tool-choice') { $opt->{enable_auto_tool_choice} = 0; }
         elsif ($arg eq '--no-prefix-caching') { $opt->{enable_prefix_caching} = 0; }
         elsif ($arg eq '--no-chunked-prefill') { $opt->{enable_chunked_prefill} = 0; }
-        elsif ($arg eq '--enable-prompt-tokens-details') { $opt->{enable_prompt_tokens_details} = 1; }
-        elsif ($arg eq '--no-enable-prompt-tokens-details') { $opt->{enable_prompt_tokens_details} = 0; }
         elsif ($arg eq '--no-language-model-only') { $opt->{language_model_only} = 0; }
         elsif ($arg eq '--language-model-only') { $opt->{language_model_only} = 1; }
         elsif ($arg eq '--no-smoke-test-chat') { $opt->{smoke_test_chat} = 0; }
@@ -247,18 +244,9 @@ sub apply_derived_options {
         $opt->{default_chat_template_kwargs} = '{"enable_thinking": false}'
             unless defined($opt->{default_chat_template_kwargs}) && $opt->{default_chat_template_kwargs} ne '';
     }
-    if ($opt->{speculative_method}) {
-        my $tokens = $opt->{num_speculative_tokens} || 2;
-        my %spec_cfg = (
-            method                 => $opt->{speculative_method},
-            num_speculative_tokens => int($tokens),
-        );
-        if ($opt->{speculative_method} =~ /^(dflash|dspark)$/) {
-            $spec_cfg{model} = $opt->{speculative_model} if $opt->{speculative_model};
-            $spec_cfg{draft_sample_method} = $opt->{draft_sample_method} if $opt->{draft_sample_method};
-        }
-        $opt->{speculative_config} = encode_json(\%spec_cfg);
-    }
+    # vLLM's current CLI uses --spec-method/--spec-model/--spec-tokens.
+    # Do not synthesize the legacy --speculative-config payload here: it
+    # cannot carry the DFlash draft model reliably across vLLM revisions.
     if ($opt->{language_model_only}) {
         $opt->{limit_mm_per_prompt} = '';
         $opt->{media_io_kwargs} = '';
@@ -299,8 +287,8 @@ sub validate_options {
     }
 
     if ($opt->{speculative_method} ne '') {
-        die "Invalid --speculative-method. Use qwen3_next_mtp, qwen3_5_mtp, dflash, or dspark\n"
-            unless $opt->{speculative_method} =~ /^(qwen3_next_mtp|qwen3_5_mtp|dflash|dspark)$/;
+        die "Invalid --speculative-method. Use dflash, qwen3_next_mtp, or qwen3_5_mtp\n"
+            unless $opt->{speculative_method} =~ /^(dflash|qwen3_next_mtp|qwen3_5_mtp)$/;
     }
 }
 
@@ -320,8 +308,8 @@ Important multimodal options:
   --no-language-model-only
       Do not pass --language-model-only. Required for image/video/audio input.
 
-  --limit-mm-per-prompt='{"image":12}'
-      Allow and limit multimodal inputs per prompt. The production limit is twelve images.
+  --limit-mm-per-prompt='{"image":4}'
+      Allow and limit multimodal inputs per prompt. For example image=1.
 
   --allowed-local-media-path=/local_opt/vllm-media
   --allowed-media-domains=example.com,example.org
@@ -333,31 +321,31 @@ Important OpenClaw/Hermes speed option:
       Adds --default-chat-template-kwargs '{"enable_thinking": false}'
 
 Examples:
-  Conservative text-only Qwen3.8 NVFP4:
+  Text-only Qwen3.6 A3B FP8:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4 \
+      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
       --served-model-name=mel_llm \
       --gpu-memory-utilization=0.70 \
       --max-model-len=32768 \
       --max-num-seqs=16 \
       --max-num-batched-tokens=8192 \
-      --tool-call-parser=qwen3_xml \
+      --tool-call-parser=qwen3_coder \
       --reasoning-parser=qwen3 \
       --disable-thinking
 
-  Multimodal Qwen3.8 NVFP4:
+  Multimodal Qwen3.6 A3B FP8 with one image allowed:
     perl deploy_vllm4dgx_v022_qwen35b.pl restart \
-      --model-id=/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4 \
+      --model-id=/local_opt/vllm-models/Qwen-Qwen3.6-27B-FP8 \
       --served-model-name=mel_llm \
-      --gpu-memory-utilization=0.75 \
-      --max-model-len=262144 \
-      --max-num-seqs=10 \
-      --max-num-batched-tokens=16384 \
-      --tool-call-parser=qwen3_xml \
+      --gpu-memory-utilization=0.70 \
+      --max-model-len=65536 \
+      --max-num-seqs=8 \
+      --max-num-batched-tokens=8192 \
+      --tool-call-parser=qwen3_coder \
       --reasoning-parser=qwen3 \
       --disable-thinking \
       --no-language-model-only \
-      --limit-mm-per-prompt='{"image":12}'
+      --limit-mm-per-prompt='{"image":4}'
 USAGE
 }
 
@@ -373,8 +361,10 @@ sub ensure_runtime_ready {
     my $probe = decode_json(python_json(python_probe_code()));
     die "vLLM validation failed in current venv\n" unless $probe->{ok};
     die "CUDA is not available to PyTorch/vLLM in current venv\n" unless $probe->{cuda_available};
-    die "Expected Triton 3.7.1, got $probe->{triton_version}\n"
-        unless ($probe->{triton_version} || '') =~ /^3.7.1/;
+    # The Qwen3.8 v0.27.2 installation uses Triton 3.7.1; the older
+    # v0.22.1 stack uses 3.6.0. Both are known-good with their paired vLLM.
+    die "Expected Triton 3.6.0 or 3.7.1, got $probe->{triton_version}\n"
+        unless ($probe->{triton_version} || '') =~ /^(?:3\.6\.0|3\.7\.1)/;
 
     # verify_symbol(); # DISABLED for SM120 Blackwell - using moe-backend triton
     verify_api_entrypoint();
@@ -475,12 +465,14 @@ sub derive_server_plan {
         force_eager                  => $OPT{force_eager} ? JSON::PP::true : JSON::PP::false,
         num_scheduler_steps          => $OPT{num_scheduler_steps} || '',
         speculative_config           => $OPT{speculative_config} || '',
+        speculative_method           => $OPT{speculative_method} || '',
+        speculative_model            => $OPT{speculative_model} || '',
+        num_speculative_tokens       => $OPT{num_speculative_tokens} || '',
         performance_mode             => $OPT{performance_mode} || '',
         optimization_level           => $OPT{optimization_level} || '',
         enable_auto_tool_choice      => $OPT{enable_auto_tool_choice} ? JSON::PP::true : JSON::PP::false,
         enable_prefix_caching        => $OPT{enable_prefix_caching} ? JSON::PP::true : JSON::PP::false,
         enable_chunked_prefill       => $OPT{enable_chunked_prefill} ? JSON::PP::true : JSON::PP::false,
-        enable_prompt_tokens_details => $OPT{enable_prompt_tokens_details} ? JSON::PP::true : JSON::PP::false,
         reasoning_parser             => $OPT{reasoning_parser} || '',
         tool_call_parser             => $OPT{tool_call_parser} || '',
         hostname                     => $HOSTNAME,
@@ -610,10 +602,11 @@ SCRIPT
     $script .= qq{CMD+=(--language-model-only)\n} if $cfg->{language_model_only};
     $script .= qq{CMD+=(--enable-prefix-caching)\n} if $cfg->{enable_prefix_caching};
     $script .= qq{CMD+=(--enable-chunked-prefill)\n} if $cfg->{enable_chunked_prefill};
-    $script .= qq{CMD+=(--enable-prompt-tokens-details)\n} if $cfg->{enable_prompt_tokens_details};
     $script .= qq{CMD+=(--moe-backend triton)\n};
     $script .= qq{CMD+=(--num-scheduler-steps } . shell_quote($cfg->{num_scheduler_steps}) . qq{)\n} if $cfg->{num_scheduler_steps};
-    $script .= qq{CMD+=(--speculative-config } . shell_quote($cfg->{speculative_config}) . qq{)\n} if $cfg->{speculative_config};
+    $script .= qq{CMD+=(--spec-method } . shell_quote($cfg->{speculative_method}) . qq{)\n} if $cfg->{speculative_method};
+    $script .= qq{CMD+=(--spec-model } . shell_quote($cfg->{speculative_model}) . qq{)\n} if $cfg->{speculative_model};
+    $script .= qq{CMD+=(--spec-tokens } . shell_quote($cfg->{num_speculative_tokens}) . qq{)\n} if $cfg->{num_speculative_tokens};
     $script .= qq{CMD+=(--performance-mode } . shell_quote($cfg->{performance_mode}) . qq{)\n} if $cfg->{performance_mode};
     $script .= qq{CMD+=(--optimization-level } . shell_quote($cfg->{optimization_level}) . qq{)\n} if $cfg->{optimization_level};
 
@@ -743,7 +736,7 @@ sub prune_archived_server_logs {
 sub stop_existing_vllm {
     system('bash', '-lc', q{pkill -f "vllm.entrypoints.openai.api_server" >/dev/null 2>&1 || true});
     system('bash', '-lc', q{pkill -f "VLLM::EngineCore" >/dev/null 2>&1 || true});
-    system('bash', '-lc', q{pkill -f "/local_opt/vllm-install-qwen38-v0271/.vllm/bin/python" >/dev/null 2>&1 || true});
+    system('bash', '-lc', q{pkill -f "/local_opt/vllm-install/.vllm/bin/python" >/dev/null 2>&1 || true});
     sleep 3;
 }
 
@@ -833,7 +826,6 @@ sub run_smoke_test {
         '--port', $cfg->{port},
         '--served-model-name', $cfg->{served_model_name},
         '--model', $cfg->{model_id},
-        '--expected-triton-version', $OPT{expected_triton_version},
         '--max-wait', $OPT{smoke_test_timeout},
     );
     push @cmd, '--test-chat' if $OPT{smoke_test_chat};

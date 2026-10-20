@@ -21,26 +21,21 @@ my %OPT = (
     backend_port           => 8000,
     backend_ssh_user       => 'root',
     backend_bind_host      => '0.0.0.0',
-    backend_install_root   => '/local_opt/vllm-install-qwen38-v0271',
-    backend_venv_root      => '/local_opt/vllm-install-qwen38-v0271/.vllm',
-    backend_vllm_src_root  => '/local_opt/vllm-install-qwen38-v0271/vllm',
-    backend_expected_triton_version => '3.7.1',
-    backend_stack_root     => '/local_opt/vllm-service-qwen38-v0271',
-    backend_cache_root     => '/local_opt/vllm-cache-qwen38-v0271',
-    backend_hf_root        => '/local_opt/hf-vllm-qwen38-v0271',
-    backend_tmp_root       => '/local_opt/tmp-vllm-qwen38-v0271',
     gateway_port           => 9000,
     model_id               => '/local_opt/vllm-models/nvidia-Qwen3.8-27B-NVFP4',
     served_model_name      => 'mel_llm',
     public_model_name      => 'mel_llm',
     backend_model_name     => 'mel_llm',
-    gpu_memory_utilization => '0.75',
-    max_model_len          => '262144',
-    max_num_batched_tokens => '32768',
+    install_root           => '/local_opt/vllm-install-qwen38-v0271',
+    venv_root              => '/local_opt/vllm-install-qwen38-v0271/.vllm',
+    vllm_src_root          => '/local_opt/vllm-install-qwen38-v0271/vllm',
+    gpu_memory_utilization => '0.85',
+    max_model_len          => '131072',
+    max_num_batched_tokens => '16384',
     max_num_seqs           => '10',
     reasoning_parser       => 'qwen3',
     tool_call_parser       => 'qwen3_xml',
-    disable_thinking             => 1,
+    disable_thinking             => 0,
     default_chat_template_kwargs => '{"enable_thinking": false}',
     kv_cache_dtype         => 'fp8',
     device                 => '',
@@ -48,18 +43,18 @@ my %OPT = (
     limit_mm_per_prompt          => '{"image":4}',
     backend_api_key        => '',
     backend_extra_args     => '',
-    enable_prompt_tokens_details => 1,
     speculative_config     => '',
+    # DFlash2 is validated with the vLLM 0.27.2 installation on node13.
     speculative_method     => 'dflash',
     num_speculative_tokens => '7',
-    speculative_model     => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
-    draft_sample_method   => 'probabilistic',
+    speculative_model      => '/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2',
+    draft_sample_method    => '',
     performance_mode       => 'throughput',
     optimization_level     => '2',
     smoke_test_after_start => 1,
 
     # gateway config (written to gateway_config.json)
-    max_concurrent_per_student => 1,
+    max_concurrent_per_student => 2,
     rpm_limit              => 60,
     client_timeout         => 300,
     downstream_timeout     => 600,
@@ -186,27 +181,15 @@ sub backend_action {
     set_watchdog_maintenance($action) if $maintenance;
 
     my @cmd = ('perl', $BKEND_SCRIPT, $action);
-    my @runtime_roots = (
-        ['backend_install_root',  'install-root'],
-        ['backend_venv_root',     'venv-root'],
-        ['backend_vllm_src_root', 'vllm-src-root'],
-        ['backend_stack_root',    'stack-root'],
-        ['backend_cache_root',    'cache-root'],
-        ['backend_hf_root',       'hf-root'],
-        ['backend_tmp_root',      'tmp-root'],
-    );
-    for my $entry (@runtime_roots) {
-        my ($key, $flag) = @$entry;
-        push @cmd, "--$flag=$OPT{$key}" if $OPT{$key} ne '';
-    }
-    push @cmd, "--expected-triton-version=$OPT{backend_expected_triton_version}"
-        if $OPT{backend_expected_triton_version} ne '';
 
     if ($action eq 'start' || $action eq 'restart') {
         push @cmd, "--host=$OPT{backend_bind_host}",
             "--port=$OPT{backend_port}",
             "--model-id=$OPT{model_id}",
             "--served-model-name=$OPT{served_model_name}",
+            "--install-root=$OPT{install_root}",
+            "--venv-root=$OPT{venv_root}",
+            "--vllm-src-root=$OPT{vllm_src_root}",
             "--max-model-len=$OPT{max_model_len}",
             "--max-num-seqs=$OPT{max_num_seqs}",
             "--max-num-batched-tokens=$OPT{max_num_batched_tokens}",
@@ -223,14 +206,12 @@ sub backend_action {
         push @cmd, "--default-chat-template-kwargs=$OPT{default_chat_template_kwargs}" if $OPT{default_chat_template_kwargs};
         push @cmd, "--speculative-config=$OPT{speculative_config}" if $OPT{speculative_config};
         push @cmd, "--speculative-method=$OPT{speculative_method}" if $OPT{speculative_method};
-        push @cmd, "--num-speculative-tokens=$OPT{num_speculative_tokens}" if $OPT{num_speculative_tokens};
         push @cmd, "--speculative-model=$OPT{speculative_model}" if $OPT{speculative_model};
-        push @cmd, "--draft-sample-method=$OPT{draft_sample_method}" if $OPT{draft_sample_method};
+        push @cmd, "--num-speculative-tokens=$OPT{num_speculative_tokens}" if $OPT{num_speculative_tokens};
         push @cmd, "--performance-mode=$OPT{performance_mode}" if $OPT{performance_mode};
         push @cmd, "--optimization-level=$OPT{optimization_level}" if $OPT{optimization_level} ne '';
         push @cmd, '--disable-thinking' if $OPT{disable_thinking};
         push @cmd, "--api-key=$OPT{backend_api_key}" if $OPT{backend_api_key};
-        push @cmd, '--enable-prompt-tokens-details' if $OPT{enable_prompt_tokens_details};
         push @cmd, '--smoke-test-after-start' if $OPT{smoke_test_after_start};
     }
 
@@ -380,30 +361,6 @@ sub install_watchdog {
         $watchdog_thinking = 'enabled';
     }
     my $watchdog_extra_args    = '';
-    my @watchdog_runtime_roots = (
-        ['backend_install_root',  'backend-install-root'],
-        ['backend_venv_root',     'backend-venv-root'],
-        ['backend_vllm_src_root', 'backend-vllm-src-root'],
-        ['backend_stack_root',    'backend-stack-root'],
-        ['backend_cache_root',    'backend-cache-root'],
-        ['backend_hf_root',       'backend-hf-root'],
-        ['backend_tmp_root',      'backend-tmp-root'],
-    );
-    for my $entry (@watchdog_runtime_roots) {
-        my ($key, $flag) = @$entry;
-        $watchdog_extra_args .= "      --$flag=" . shell_quote($OPT{$key}) . " \\\n"
-            if $OPT{$key} ne '';
-    }
-    $watchdog_extra_args .= "      --backend-expected-triton-version=" . shell_quote($OPT{backend_expected_triton_version}) . " \\\n"
-        if $OPT{backend_expected_triton_version} ne '';
-    $watchdog_extra_args .= "      --tool-call-parser=" . shell_quote($OPT{tool_call_parser}) . " \\\n"
-        if $OPT{tool_call_parser};
-    $watchdog_extra_args .= "      --reasoning-parser=" . shell_quote($OPT{reasoning_parser}) . " \\\n"
-        if $OPT{reasoning_parser};
-    $watchdog_extra_args .= "      --kv-cache-dtype=" . shell_quote($OPT{kv_cache_dtype}) . " \\\n"
-        if $OPT{kv_cache_dtype};
-    $watchdog_extra_args .= "      --device=" . shell_quote($OPT{device}) . " \\\n"
-        if $OPT{device};
     $watchdog_extra_args .= "      --default-chat-template-kwargs=" . shell_quote($OPT{default_chat_template_kwargs}) . " \\\n"
         if $OPT{default_chat_template_kwargs};
     $watchdog_extra_args .= $OPT{language_model_only}
@@ -415,18 +372,14 @@ sub install_watchdog {
         if $OPT{speculative_config};
     $watchdog_extra_args .= "      --speculative-method=" . shell_quote($OPT{speculative_method}) . " \\\n"
         if $OPT{speculative_method};
-    $watchdog_extra_args .= "      --num-speculative-tokens=" . shell_quote($OPT{num_speculative_tokens}) . " \\\n"
-        if $OPT{num_speculative_tokens};
     $watchdog_extra_args .= "      --speculative-model=" . shell_quote($OPT{speculative_model}) . " \\\n"
         if $OPT{speculative_model};
-    $watchdog_extra_args .= "      --draft-sample-method=" . shell_quote($OPT{draft_sample_method}) . " \\\n"
-        if $OPT{draft_sample_method};
+    $watchdog_extra_args .= "      --num-speculative-tokens=" . shell_quote($OPT{num_speculative_tokens}) . " \\\n"
+        if $OPT{num_speculative_tokens};
     $watchdog_extra_args .= "      --performance-mode=" . shell_quote($OPT{performance_mode}) . " \\\n"
         if $OPT{performance_mode};
     $watchdog_extra_args .= "      --optimization-level=" . shell_quote($OPT{optimization_level}) . " \\\n"
         if $OPT{optimization_level} ne '';
-    $watchdog_extra_args .= "      --enable-prompt-tokens-details \\\n"
-        if $OPT{enable_prompt_tokens_details};
     $watchdog_extra_args .= "      --disable-thinking \\\n" if $OPT{disable_thinking};
 
     open my $fh, '>', $watchdog or die "Cannot write $watchdog: $!\n";
@@ -508,11 +461,11 @@ capture_forensics() {
   journalctl -k --since '-30 minutes' --no-pager > "\$out_dir/master_kernel_last_30m.log" 2>&1 || true
 
   if [ -x "\$BACKEND_FORENSICS_SCRIPT" ]; then
-    timeout 75 ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \\
-      "\$BACKEND_FORENSICS_SCRIPT --incident-id=\$incident_id" \\
+    timeout 75 ssh -n -o BatchMode=yes -o ConnectTimeout=8 "\$BACKEND_HOST" \
+      "\$BACKEND_FORENSICS_SCRIPT --incident-id=\$incident_id" \
       > "\$out_dir/node13_capture_path.log" 2>&1 || true
   else
-    printf 'backend forensic script missing: %s\\n' "\$BACKEND_FORENSICS_SCRIPT" \\
+    printf 'backend forensic script missing: %s\\n' "\$BACKEND_FORENSICS_SCRIPT" \
       > "\$out_dir/node13_capture_path.log"
   fi
 
@@ -595,6 +548,8 @@ restart_backend() {
       --max-model-len=$OPT{max_model_len} \\
       --max-num-batched-tokens=$OPT{max_num_batched_tokens} \\
       --max-num-seqs=$OPT{max_num_seqs} \\
+      --tool-call-parser=qwen3_coder \\
+      --reasoning-parser=qwen3 \\
 $watchdog_extra_args      --smoke-test-after-start
   ) >> "\$LOG_FILE" 2>&1
   local rc=\$?
@@ -754,8 +709,6 @@ sub parse_args {
         elsif ($_ eq '--enable-thinking') { $OPT{disable_thinking} = 0; $OPT{default_chat_template_kwargs} = '{"enable_thinking": true}' }
         elsif ($_ eq '--no-language-model-only') { $OPT{language_model_only} = 0 }
         elsif ($_ eq '--language-model-only') { $OPT{language_model_only} = 1 }
-        elsif ($_ eq '--enable-prompt-tokens-details') { $OPT{enable_prompt_tokens_details} = 1 }
-        elsif ($_ eq '--no-enable-prompt-tokens-details') { $OPT{enable_prompt_tokens_details} = 0 }
         elsif ($_ eq '--rewrite-model-name') { $OPT{rewrite_model_name} = 1 }
         elsif ($_ eq '--no-rewrite-model-name') { $OPT{rewrite_model_name} = 0 }
         elsif ($_ eq '--with-cleanup') { $OPT{with_cleanup} = 1 }
@@ -807,11 +760,10 @@ Backend options (defaults):
   --max-num-seqs=$OPT{max_num_seqs}
   --max-num-batched-tokens=$OPT{max_num_batched_tokens}
   --reasoning-parser=qwen3
-  --tool-call-parser=qwen3_xml
+  --tool-call-parser=qwen3_coder
   --enable-thinking / --disable-thinking
   --default-chat-template-kwargs='{"enable_thinking": false}'
   --no-language-model-only (enable multimodal)
-  --enable-prompt-tokens-details (return usage.prompt_tokens_details.cached_tokens)
   --vllm-allow-long-max-model-len (override model's max_position_embeddings)
   --skip-backend (skip backend restart in apply-all)
   --with-cleanup (run master-cleanup before apply-all)
