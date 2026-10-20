@@ -41,10 +41,10 @@ SERVED_MODEL_NAME="mel_llm"
 HOST="127.0.0.1"
 PORT="8000"
 DTYPE="auto"
-GPU_MEMORY_UTIL="0.75"
+GPU_MEMORY_UTIL="0.85"
 MAX_WAIT_SEC="2400"
-MAX_MODEL_LEN="262144"
-MAX_NUM_SEQS="20"
+MAX_MODEL_LEN="131072"
+MAX_NUM_SEQS="10"
 MAX_NUM_BATCHED_TOKENS="16384"
 CHAT_MAX_TOKENS="256"
 CHAT_TEMPERATURE="0"
@@ -52,9 +52,11 @@ REASONING_PARSER="qwen3"
 TOOL_CALL_PARSER="qwen3_xml"
 EXPECTED_TRITON_VERSION="3.7.1"
 KV_CACHE_DTYPE="fp8"
-LIMIT_MM_PER_PROMPT='{"image":12}'
+LIMIT_MM_PER_PROMPT='{"image":4}'
 DEFAULT_CHAT_TEMPLATE_KWARGS='{"enable_thinking":false}'
-SPECULATIVE_CONFIG='{"draft_sample_method":"probabilistic","model":"/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2","num_speculative_tokens":7,"method":"dflash"}'
+SPECULATIVE_METHOD="dflash"
+SPECULATIVE_MODEL="/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2"
+NUM_SPECULATIVE_TOKENS="7"
 PERFORMANCE_MODE="throughput"
 OPTIMIZATION_LEVEL="2"
 ENABLE_PROMPT_TOKENS_DETAILS=1
@@ -97,10 +99,10 @@ Defaults match the current Qwen3.8/DFlash2 smoke-test profile:
   Served model name  : mel_llm
   Host               : 127.0.0.1
   Port               : 8000
-  Max model len      : 262144
-  Max num seqs       : 20
+  Max model len      : 131072
+  Max num seqs       : 10
   Max batched tokens : 16384
-  GPU memory util    : 0.75
+  GPU memory util    : 0.85
   Reasoning parser   : qwen3
   Tool parser        : qwen3_xml
 
@@ -142,15 +144,15 @@ Common options:
 Model/server options:
   --gpu-memory-util FLOAT
       vLLM GPU memory utilization.
-      Default: 0.75
+      Default: 0.85
 
   --max-model-len INT
       Maximum context length.
-      Default: 262144
+      Default: 131072
 
   --max-num-seqs INT
       Maximum concurrent sequences.
-      Default: 20
+      Default: 10
 
   --max-num-batched-tokens INT
       Maximum batched tokens.
@@ -358,14 +360,6 @@ verify_python_environment() {
   log_info "Verifying Python environment..."
 
   if ! EXPECTED_TRITON_VERSION="$EXPECTED_TRITON_VERSION" python - <<'PY'
-KV_CACHE_DTYPE="fp8"
-LIMIT_MM_PER_PROMPT='{"image":12}'
-DEFAULT_CHAT_TEMPLATE_KWARGS='{"enable_thinking":false}'
-SPECULATIVE_CONFIG='{"draft_sample_method":"probabilistic","model":"/local_opt/vllm-models/incoai-Qwen3.8-27B-DFlash2","num_speculative_tokens":7,"method":"dflash"}'
-PERFORMANCE_MODE="throughput"
-OPTIMIZATION_LEVEL="2"
-ENABLE_PROMPT_TOKENS_DETAILS=1
-MOE_BACKEND="triton"
 import inspect
 import os
 import torch
@@ -554,7 +548,9 @@ start_server_if_needed() {
     --limit-mm-per-prompt "$LIMIT_MM_PER_PROMPT" \
     --default-chat-template-kwargs "$DEFAULT_CHAT_TEMPLATE_KWARGS" \
     --moe-backend "$MOE_BACKEND" \
-    --speculative-config "$SPECULATIVE_CONFIG" \
+    --spec-method "$SPECULATIVE_METHOD" \
+    --spec-model "$SPECULATIVE_MODEL" \
+    --spec-tokens "$NUM_SPECULATIVE_TOKENS" \
     --performance-mode "$PERFORMANCE_MODE" \
     --optimization-level "$OPTIMIZATION_LEVEL" \
     "${EXTRA_ARGS[@]}" \

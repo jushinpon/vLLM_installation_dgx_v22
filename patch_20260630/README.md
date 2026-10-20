@@ -1,5 +1,10 @@
 # vLLM Lab Deployment Guide
 
+> **Historical documentation:** this directory describes the 2026-06/2026-07
+> Qwen3.6/MTP deployment and rollback material. It is not the current
+> Qwen3.8-27B-NVFP4 + DFlash2 production configuration. Use the repository
+> root `README.md` and `README_dflash2.md` for the current rebuild path.
+
 ## Architecture
 
 | Component | Host | Details |

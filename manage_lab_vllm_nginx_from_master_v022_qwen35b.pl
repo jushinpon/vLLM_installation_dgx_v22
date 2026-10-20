@@ -548,7 +548,7 @@ restart_backend() {
       --max-model-len=$OPT{max_model_len} \\
       --max-num-batched-tokens=$OPT{max_num_batched_tokens} \\
       --max-num-seqs=$OPT{max_num_seqs} \\
-      --tool-call-parser=qwen3_coder \\
+      --tool-call-parser=qwen3_xml \\
       --reasoning-parser=qwen3 \\
 $watchdog_extra_args      --smoke-test-after-start
   ) >> "\$LOG_FILE" 2>&1
@@ -760,7 +760,7 @@ Backend options (defaults):
   --max-num-seqs=$OPT{max_num_seqs}
   --max-num-batched-tokens=$OPT{max_num_batched_tokens}
   --reasoning-parser=qwen3
-  --tool-call-parser=qwen3_coder
+  --tool-call-parser=qwen3_xml
   --enable-thinking / --disable-thinking
   --default-chat-template-kwargs='{"enable_thinking": false}'
   --no-language-model-only (enable multimodal)
@@ -779,9 +779,9 @@ Gateway options (written to gateway_config.json):
 
 Example:
   perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \\
-    --gpu-memory-utilization=0.85 --max-model-len=320000 \\
-    --max-num-seqs=4 --max-num-batched-tokens=320000 \\
-    --max-concurrent-per-student=6 --rpm-limit=120 \\
+    --gpu-memory-utilization=0.85 --max-model-len=131072 \\
+    --max-num-seqs=10 --max-num-batched-tokens=16384 \\
+    --max-concurrent-per-student=2 --rpm-limit=60 \\
     --client-timeout=300 --downstream-timeout=600
 USAGE
 }
