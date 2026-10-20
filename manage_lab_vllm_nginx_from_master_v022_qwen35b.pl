@@ -54,7 +54,7 @@ my %OPT = (
     smoke_test_after_start => 1,
 
     # gateway config (written to gateway_config.json)
-    max_concurrent_per_student => 2,
+    max_concurrent_per_student => 4,
     rpm_limit              => 60,
     client_timeout         => 300,
     downstream_timeout     => 600,
@@ -781,7 +781,7 @@ Example:
   perl manage_lab_vllm_nginx_from_master_v022_qwen35b.pl apply-all \\
     --gpu-memory-utilization=0.85 --max-model-len=131072 \\
     --max-num-seqs=10 --max-num-batched-tokens=16384 \\
-    --max-concurrent-per-student=2 --rpm-limit=60 \\
+    --max-concurrent-per-student=4 --rpm-limit=60 \\
     --client-timeout=300 --downstream-timeout=600
 USAGE
 }

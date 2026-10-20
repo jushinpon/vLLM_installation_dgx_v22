@@ -30,7 +30,7 @@ node13.  The source checkout is vLLM commit
 The nginx generator creates real `limit_conn` zones:
 
 ```text
-default students: 2 active HTTP inference connections
+default students: 4 active HTTP inference connections
 dsh:              6
 hermes:           6
 jsp:              6
@@ -74,7 +74,7 @@ The gateway source is `deploy_nginx_gateway_v022_qwen35b.pl`.  It generates
 student-token file, then validates and reloads nginx.  The generated config and
 tokens are runtime files and must not be committed.
 
-The manager default is `max_concurrent_per_student=2`; the current `dsh`,
+The manager default is `max_concurrent_per_student=4`; the current `dsh`,
 `hermes`, and `jsp` accounts are set to `6` by their runtime student records.
 
 After provisioning the student-token file, apply those non-secret overrides

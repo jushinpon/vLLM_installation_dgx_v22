@@ -44,7 +44,7 @@ connections per authenticated student:
 
 | Student class | Active limit | Overflow |
 |---|---:|---|
-| Default | 2 | HTTP 429 |
+| Default | 4 | HTTP 429 |
 | `dsh` | 6 | HTTP 429 |
 | `hermes` | 6 | HTTP 429 |
 | `jsp` | 6 | HTTP 429 |

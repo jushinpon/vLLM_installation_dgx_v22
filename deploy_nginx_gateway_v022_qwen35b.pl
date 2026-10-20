@@ -87,8 +87,8 @@ sub generate_nginx_config {
     my $client_to    = $cfg->{client_timeout} || 60;
     my $down_to      = $cfg->{downstream_timeout} || 600;
     my $hard_to      = $cfg->{request_hard_timeout} || 900;
-    my $default_concurrent = $cfg->{max_concurrent_per_student} || 2;
-    $default_concurrent = 2 unless $default_concurrent =~ /^\d+$/ && $default_concurrent > 0;
+    my $default_concurrent = $cfg->{max_concurrent_per_student} || 4;
+    $default_concurrent = 4 unless $default_concurrent =~ /^\d+$/ && $default_concurrent > 0;
 
     my $backend = "http://$backend_host:$backend_port";
 
@@ -108,7 +108,7 @@ sub generate_nginx_config {
 
     # nginx 1.14 cannot use a variable as the numeric limit_conn value.  Build
     # one zone per distinct limit and route each student into exactly one zone
-    # with an empty key in all other zones.  This gives us default=2 with
+    # with an empty key in all other zones.  This gives us default=4 with
     # per-student overrides such as dsh/hermes=6.
     my $concurrency_maps = '';
     my $concurrency_zones = '';
