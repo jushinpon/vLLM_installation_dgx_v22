@@ -47,10 +47,11 @@ connections per authenticated student:
 | Default | 2 | HTTP 429 |
 | `dsh` | 6 | HTTP 429 |
 | `hermes` | 6 | HTTP 429 |
+| `jsp` | 6 | HTTP 429 |
 
-The default is in `gateway_config.json`; `dsh` and `hermes` overrides are in
-the protected runtime student records. Tokens and generated nginx files are
-never committed.
+The default is in `gateway_config.json`; `dsh`, `hermes`, and `jsp` overrides
+are in the protected runtime student records. Tokens and generated nginx files
+are never committed.
 
 ### Watchdog and planned restarts
 
@@ -279,6 +280,8 @@ perl deploy_nginx_gateway_v022_qwen35b.pl \
   set-student-limits --student-id=dsh --max-concurrent=6
 perl deploy_nginx_gateway_v022_qwen35b.pl \
   set-student-limits --student-id=hermes --max-concurrent=6
+perl deploy_nginx_gateway_v022_qwen35b.pl \
+  set-student-limits --student-id=jsp --max-concurrent=6
 ```
 
 ## Runtime paths

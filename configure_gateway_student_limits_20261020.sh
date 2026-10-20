@@ -10,5 +10,6 @@ NGINX_MANAGER="$ROOT/deploy_nginx_gateway_v022_qwen35b.pl"
 # overrides make a fresh gateway deployment reproduce the production limits.
 perl "$NGINX_MANAGER" set-student-limits dsh --max-concurrent=6
 perl "$NGINX_MANAGER" set-student-limits hermes --max-concurrent=6
+perl "$NGINX_MANAGER" set-student-limits jsp --max-concurrent=6
 
-echo "Gateway student concurrency limits applied: dsh=6 hermes=6"
+echo "Gateway student concurrency limits applied: dsh=6 hermes=6 jsp=6"
